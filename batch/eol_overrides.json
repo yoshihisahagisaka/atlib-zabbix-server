@@ -1,0 +1,30 @@
+{
+  "_comment": "キー: 'Vendor Model'。eol: YYYY-MM-DD or true/false。source_url は一次情報 URL。",
+
+  "NETGEAR WAX625": {
+    "eol_date":    "2026-10-31",
+    "eol":         "2026-10-31",
+    "latest":      "12.5.0.14",
+    "last_sale":   "2023-11-01",
+    "source":      "manual",
+    "source_url":  "https://www.downloads.netgear.com/files/netgear/pdfs/EOL.pdf"
+  },
+
+  "Ubiquiti UCG-Ultra": {
+    "eol_date":   null,
+    "eol":        false,
+    "latest":     null,
+    "source":     "manual",
+    "source_url": "https://ui.com/download/releases/network-server",
+    "note":       "EoL 未発表（2026-06 時点）。要定期確認。"
+  },
+
+  "Brother MFC-L3780CDW": {
+    "eol_date":   null,
+    "eol":        false,
+    "latest":     "1.35",
+    "source":     "manual",
+    "source_url": "https://support.brother.com/",
+    "note":       "CVE 既知7件は FW 1.20 で修正済。現行 1.35 は対応済み。"
+  }
+}

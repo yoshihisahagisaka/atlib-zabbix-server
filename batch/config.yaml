@@ -1,0 +1,13 @@
+zabbix:
+  url: "https://YOUR_ZABBIX_HOST/zabbix/api_jsonrpc.php"  # 環境変数 ZABBIX_URL で上書き可
+  user: "api_user"                                          # 環境変数 ZABBIX_USER で上書き可
+  password: "YOUR_PASSWORD"                                 # 環境変数 ZABBIX_PASSWORD で上書き可
+
+nvd:
+  api_key: ""  # 環境変数 NVD_API_KEY で上書き可。https://nvd.nist.gov/developers/request-an-api-key で取得（任意・レート制限緩和）
+
+output:
+  dir: "./reports"
+
+writeback:
+  enabled: true   # Zabbixホストへリスク情報を書き戻す（false でスキップ）

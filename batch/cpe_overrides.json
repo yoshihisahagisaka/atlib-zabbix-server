@@ -1,0 +1,6 @@
+{
+  "_comment": "キー: 'Vendor Model'（Zabbixインベントリのvendor+model）、値: NVD CPE 2.3 文字列",
+  "NETGEAR WAX625":       "cpe:2.3:h:netgear:wax625:-:*:*:*:*:*:*:*",
+  "Ubiquiti UCG-Ultra":   "cpe:2.3:h:ui:ucg-ultra:-:*:*:*:*:*:*:*",
+  "Brother MFC-L3780CDW": "cpe:2.3:h:brother:mfc-l3780cdw:-:*:*:*:*:*:*:*"
+}

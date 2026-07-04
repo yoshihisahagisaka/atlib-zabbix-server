@@ -1,0 +1,2095 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>atLIB インフラ運用サポート - 月次健全性報告書</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+<script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ===== リセット & ベース ===== */
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Noto Sans JP','Helvetica Neue',Arial,sans-serif;background:#eceff1;color:#37474f;padding:20px;}
+
+/* ===== 管理パネル ===== */
+.admin-panel{max-width:1200px;margin:0 auto 18px;background:linear-gradient(135deg,#1a237e 0%,#263238 100%);color:#fff;padding:14px 20px;border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 4px 12px rgba(0,0,0,0.25);flex-wrap:wrap;}
+.admin-left{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.admin-left strong{font-size:13px;white-space:nowrap;margin-right:4px;}
+.admin-panel select{background:#37474f;color:#fff;border:1px solid #546e7a;padding:5px 8px;border-radius:4px;font-size:12px;cursor:pointer;}
+.admin-panel select:focus{outline:none;border-color:#80cbc4;}
+.btn{background:#26a69a;color:#fff;border:none;padding:7px 14px;border-radius:4px;font-weight:700;font-size:12px;cursor:pointer;transition:background .2s,transform .1s;white-space:nowrap;}
+.btn:hover{background:#80cbc4;}
+.btn:active{transform:scale(0.97);}
+.btn-pptx{background:#0288d1;}
+.btn-pptx:hover{background:#4fc3f7;}
+.btn-danger{background:#c62828;}
+.btn-danger:hover{background:#ef9a9a;color:#c62828;}
+.admin-note{font-size:10px;opacity:0.75;color:#fff9c4;text-align:right;flex-shrink:0;}
+
+/* ===== ステータスバー ===== */
+#status-bar{max-width:1200px;margin:0 auto 12px;padding:8px 14px;border-radius:6px;font-size:12px;display:none;align-items:center;gap:8px;}
+#status-bar.info{background:#e3f2fd;color:#1565c0;border:1px solid #90caf9;display:flex;}
+#status-bar.success{background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;display:flex;}
+#status-bar.error{background:#ffebee;color:#c62828;border:1px solid #ef9a9a;display:flex;}
+.spin{animation:spin 1s linear infinite;display:inline-block;}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ===== スライド共通 ===== */
+.slide{width:1200px;min-height:675px;height:675px;background:#fff;margin:0 auto 30px;box-shadow:0 6px 20px rgba(0,0,0,0.12);border-top:8px solid #1a237e;position:relative;padding:36px 40px;display:flex;flex-direction:column;overflow:hidden;}
+.slide-header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #cfd8dc;padding-bottom:12px;margin-bottom:0;}
+.slide-header h2{margin:0;font-size:22px;color:#1a237e;font-weight:700;}
+.slide-meta{text-align:right;font-size:11px;color:#78909c;line-height:1.6;}
+.slide-body{flex:1;margin-top:20px;position:relative;overflow:hidden;}
+.slide-footer{display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#90a4ae;border-top:1px solid #eceff1;padding-top:8px;margin-top:auto;}
+.footer-center{position:absolute;left:50%;transform:translateX(-50%);font-weight:700;color:#546e7a;}
+
+/* ===== バッジ ===== */
+.badge{display:inline-block;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;white-space:nowrap;}
+.badge-critical{background:#ffebee;color:#c62828;border:1px solid #ef9a9a;}
+.badge-success{background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;}
+.badge-warning{background:#fff3e0;color:#e65100;border:1px solid #ffcc80;}
+.badge-neutral{background:#f5f5f5;color:#78909c;border:1px solid #cfd8dc;}
+.badge-info{background:#e3f2fd;color:#1565c0;border:1px solid #90caf9;}
+
+/* ===== スコアボックス ===== */
+.score-box{font-size:88px;font-weight:700;text-align:center;line-height:1;}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:30px;height:100%;}
+
+/* ===== テーブル共通 ===== */
+.table-wrap{overflow-y:auto;max-height:490px;border-radius:4px;border:1px solid #e0e0e0;}
+table.report-table{width:100%;border-collapse:collapse;font-size:11.5px;table-layout:fixed;}
+table.report-table th{background:#eceff1;padding:9px 10px;text-align:left;border-bottom:2px solid #b0bec5;color:#37474f;position:sticky;top:0;z-index:10;font-size:11px;}
+table.report-table td{padding:9px 10px;border-bottom:1px solid #e0e0e0;vertical-align:middle;word-break:break-all;line-height:1.4;}
+table.report-table tr:nth-child(even){background:#fbfbfc;}
+table.report-table tr:hover{background:#f0f4ff;}
+
+/* ===== トポロジーマップ ===== */
+#map-container{position:relative;width:100%;height:490px;}
+#topology-report-map{width:100%;height:100%;background:#f8f9fa;border:1px solid #cfd8dc;border-radius:6px;}
+.map-legend{position:absolute;top:10px;right:10px;background:rgba(255,255,255,0.97);border:1px solid #b0bec5;border-radius:6px;padding:8px 12px;font-size:10px;box-shadow:0 2px 8px rgba(0,0,0,0.08);z-index:100;width:190px;}
+.legend-title{font-weight:700;color:#1a237e;border-bottom:1px solid #cfd8dc;padding-bottom:3px;margin-bottom:6px;font-size:10.5px;}
+.legend-item{display:flex;align-items:center;gap:6px;margin-bottom:4px;}
+.legend-line{width:22px;height:0;border-top-width:2.5px;flex-shrink:0;}
+.legend-circle{width:10px;height:10px;border-radius:50%;border:1px solid rgba(0,0,0,0.15);flex-shrink:0;}
+.legend-sep{height:1px;background:#eceff1;margin:5px 0;}
+
+/* ===== バカハブ検出バナー ===== */
+#hub-alert-banner{display:none;background:linear-gradient(90deg,#b71c1c,#e53935);color:#fff;border-radius:6px;padding:8px 14px;margin-bottom:10px;font-size:12px;font-weight:700;align-items:center;gap:8px;}
+#hub-alert-banner.visible{display:flex;}
+
+/* ===== インターフェース一覧 並べ替えトグル ===== */
+.sort-toggle{display:inline-flex;border:1px solid #b0bec5;border-radius:4px;overflow:hidden;vertical-align:middle;}
+.sort-toggle .sort-btn{background:#f5f5f5;color:#546e7a;border:none;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;transition:background .2s,color .2s;border-right:1px solid #cfd8dc;}
+.sort-toggle .sort-btn:last-child{border-right:none;}
+.sort-toggle .sort-btn:hover{background:#eceff1;}
+.sort-toggle .sort-btn.active{background:#1a237e;color:#fff;}
+#if-sort-hint{font-size:10px;color:#90a4ae;margin-left:8px;vertical-align:middle;}
+.if-drag-handle{cursor:grab;color:#90a4ae;font-size:13px;user-select:none;flex-shrink:0;}
+.if-drag-handle:active{cursor:grabbing;}
+tr.if-row.dragging{opacity:0.4;}
+tr.if-row.drag-over-top td{box-shadow:inset 0 2px 0 0 #1a237e;}
+tr.if-row.drag-over-bottom td{box-shadow:inset 0 -2px 0 0 #1a237e;}
+
+/* ===== 編集可能セル ===== */
+.manual-row{background:#fffde7;}
+.editable-cell{cursor:text;border:1px dashed #fbc02d;min-height:24px;display:block;width:100%;padding:4px 6px;border-radius:2px;font-size:11.5px;line-height:1.4;outline:none;}
+.editable-cell:focus{background:#fff9c4;border:1px solid #fbc02d;}
+.editable-inline{cursor:text;display:inline-block;min-width:50px;border-bottom:1px dashed #fbc02d;outline:none;}
+.editable-inline:focus{background:#fff9c4;border-bottom:2px solid #fbc02d;}
+
+/* ===== スライド1 表紙 ===== */
+#slide-1{background:linear-gradient(160deg,#ffffff 60%,#e8eaf6 100%);}
+.cover-brand{position:absolute;top:36px;right:40px;}
+.cover-body{margin-top:80px;text-align:center;}
+.cover-body h1{color:#1a237e;font-size:38px;font-weight:700;margin-bottom:8px;letter-spacing:-0.5px;}
+.cover-body .sub{font-size:16px;color:#546e7a;margin-bottom:40px;}
+.cover-meta{border-top:2px solid #1a237e;padding-top:18px;margin-top:30px;display:flex;justify-content:space-between;align-items:flex-end;}
+.cover-meta-left h3{font-size:20px;color:#37474f;font-weight:700;}
+.cover-meta-left p{font-size:14px;color:#78909c;margin-top:4px;}
+.cover-meta-right{text-align:right;font-size:13px;color:#78909c;line-height:1.8;}
+
+/* ===== サマリー SLAゲージ ===== */
+.sla-gauge-wrap{margin-top:12px;}
+.sla-gauge-bar{height:12px;background:#e0e0e0;border-radius:6px;overflow:hidden;margin-top:6px;}
+.sla-gauge-fill{height:100%;background:linear-gradient(90deg,#43a047,#2e7d32);border-radius:6px;transition:width 1s ease;}
+
+/* ===== KPIカード ===== */
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:18px;}
+.kpi-card{background:#f8f9fa;border:1px solid #e0e0e0;border-radius:6px;padding:12px 14px;text-align:center;}
+.kpi-card .kpi-label{font-size:10px;color:#78909c;margin-bottom:4px;}
+.kpi-card .kpi-value{font-size:26px;font-weight:700;color:#1a237e;line-height:1;}
+.kpi-card .kpi-sub{font-size:10px;color:#78909c;margin-top:3px;}
+
+/* ===== アップグレード提案スライド ===== */
+.upsell-table{width:100%;border-collapse:collapse;font-size:12.5px;table-layout:fixed;}
+.upsell-table th{padding:12px;text-align:left;border-bottom:2px solid #1a237e;color:#1a237e;font-weight:700;background:#f8f9fa;}
+.upsell-table td{padding:11px 12px;border-bottom:1px solid #cfd8dc;vertical-align:middle;}
+.upsell-table tr:last-child td{border-bottom:none;}
+.check-yes{color:#2e7d32;font-weight:700;}
+.check-no{color:#b0bec5;}
+.recommended{background:rgba(26,35,126,0.03);}
+
+/* ===== トラフィックチャート ===== */
+#traffic-chart-wrap{flex:1;position:relative;min-height:0;}
+#traffic-chart{width:100%!important;height:100%!important;}
+#traffic-no-data{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#78909c;font-size:13px;text-align:center;line-height:2;}
+
+/* ===== 印刷 & エクスポート ===== */
+@media print{
+  body{padding:0;background:#fff;}
+  .admin-panel,#status-bar{display:none!important;}
+  .slide{box-shadow:none!important;margin:0!important;page-break-after:always;}
+}
+body.export-mode .admin-panel{display:none!important;}
+body.export-mode .manual-row{background:#fff!important;}
+body.export-mode .editable-cell{border:none!important;background:transparent!important;}
+body.export-mode .editable-inline{border:none!important;background:transparent!important;}
+body.export-mode .btn{display:none!important;}
+body.export-mode #hub-alert-banner{display:none!important;}
+</style>
+</head>
+<body>
+
+<!-- ===== 管理パネル ===== -->
+<div class="admin-panel">
+  <div class="admin-left">
+    <strong>⚙️ atLIB 報告システム</strong>
+    <select id="target-group" onchange="loadHostsInGroup()">
+      <option value="">── 顧客選択 ──</option>
+    </select>
+    <select id="target-host">
+      <option value="">── デバイス選択 ──</option>
+    </select>
+    <select id="target-year">
+      <option value="2025">2025年</option>
+      <option value="2026" selected>2026年</option>
+      <option value="2027">2027年</option>
+    </select>
+    <select id="target-month">
+      <option value="01">01月</option><option value="02">02月</option>
+      <option value="03">03月</option><option value="04">04月</option>
+      <option value="05">05月</option><option value="06" selected>06月</option>
+      <option value="07">07月</option><option value="08">08月</option>
+      <option value="09">09月</option><option value="10">10月</option>
+      <option value="11">11月</option><option value="12">12月</option>
+    </select>
+    <span style="font-size:12px;color:#546e7a;margin-right:2px;">WAN IF</span>
+    <select id="wan-if-in" onchange="onWanIfChange()" title="WANインターフェース IN（受信）" style="min-width:160px;">
+      <option value="">── IN ──</option>
+    </select>
+    <select id="wan-if-out" onchange="onWanIfChange()" title="WANインターフェース OUT（送信）" style="min-width:160px;">
+      <option value="">── OUT ──</option>
+    </select>
+    <button class="btn" onclick="refreshReportData()">🔄 データ同期</button>
+    <button class="btn btn-pptx" onclick="exportToPPTX()">📥 PPTX出力</button>
+  </div>
+  <div class="admin-note">※黄点線セルは直接編集可（免責補完など）</div>
+</div>
+
+<!-- ===== ステータスバー ===== -->
+<div id="status-bar">
+  <span id="status-icon"></span>
+  <span id="status-msg"></span>
+</div>
+
+<!-- ========================================
+     スライド 1：表紙
+     ======================================== -->
+<div class="slide" id="slide-1">
+  <div class="cover-brand">
+    <img src="atlib_logo.png" alt="atLIB" style="height:44px;" onerror="this.style.display='none'">
+  </div>
+  <div class="cover-body">
+    <h1>月次インフラ健全性報告書</h1>
+    <p class="sub">Monthly Infrastructure Health Report</p>
+  </div>
+  <div class="cover-meta">
+    <div class="cover-meta-left">
+      <h3 id="lbl-customer">対象顧客未選択</h3>
+      <p id="lbl-period">対象期間：2026年06月度</p>
+    </div>
+    <div class="cover-meta-right">
+      <div>提供：atLIB株式会社 運用チーム</div>
+      <div>報告日：<span id="lbl-date">──</span></div>
+    </div>
+  </div>
+  <div class="slide-footer">
+    <div>CONFIDENTIAL</div>
+    <div class="footer-center">© 2026 atLIB Inc.</div>
+    <div>Page 1</div>
+  </div>
+</div>
+
+<!-- ========================================
+     スライド 2：月次サマリー
+     ======================================== -->
+<div class="slide" id="slide-2">
+  <div class="slide-header">
+    <h2>1. 月次インフラ健全性サマリー</h2>
+    <div class="slide-meta">atLIB インフラ運用サポート<br><span id="lbl-period-s2"></span></div>
+  </div>
+  <div class="slide-body">
+    <!-- KPIカード -->
+    <div class="kpi-row">
+      <div class="kpi-card">
+        <div class="kpi-label">監視ホスト数</div>
+        <div class="kpi-value" id="kpi-hosts">──</div>
+        <div class="kpi-sub">台</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">月間インシデント</div>
+        <div class="kpi-value" id="kpi-incidents">──</div>
+        <div class="kpi-sub">件</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">ダウンタイム</div>
+        <div class="kpi-value" id="kpi-downtime">──</div>
+        <div class="kpi-sub">分</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">未知デバイス検出</div>
+        <div class="kpi-value" id="kpi-unknown" style="color:#e53935;">──</div>
+        <div class="kpi-sub">件</div>
+      </div>
+    </div>
+    <!-- SLAスコア -->
+    <div class="grid-2" style="margin-top:0;gap:30px;">
+      <div style="border-right:1px solid #cfd8dc;padding-right:30px;display:flex;flex-direction:column;justify-content:center;align-items:center;">
+        <h3 style="font-size:14px;color:#546e7a;margin-bottom:12px;">総合可用性評価</h3>
+        <div class="score-box" id="sla-score-color">
+          <span contenteditable="true" class="editable-inline" id="edit-sla-score">A</span>
+        </div>
+        <div style="margin-top:10px;">
+          <span contenteditable="true" class="editable-inline badge badge-success" id="edit-sla-status" style="font-size:14px;padding:6px 16px;">健全（SLA適合）</span>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;justify-content:center;">
+        <h3 style="font-size:14px;color:#546e7a;margin-bottom:8px;">月間SLA稼働率実績</h3>
+        <div style="font-size:52px;font-weight:700;color:#2e7d32;">
+          <span contenteditable="true" class="editable-inline" id="edit-sla-percent">100.0%</span>
+        </div>
+        <div class="sla-gauge-wrap">
+          <div style="font-size:10px;color:#78909c;display:flex;justify-content:space-between;">
+            <span>0%</span><span>99%</span><span>100%</span>
+          </div>
+          <div class="sla-gauge-bar">
+            <div class="sla-gauge-fill" id="sla-gauge-fill" style="width:100%;"></div>
+          </div>
+        </div>
+        <p style="font-size:11px;color:#78909c;margin-top:10px;">障害検知から復旧までのダウンタイムにより自動算出。免責調整はSLAスコア・稼働率を直接編集してください。</p>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer">
+    <div>CONFIDENTIAL</div>
+    <div class="footer-center">© 2026 atLIB Inc.</div>
+    <div>Page 2</div>
+  </div>
+</div>
+
+<!-- ========================================
+     スライド 3：障害インシデント
+     ======================================== -->
+<div class="slide" id="slide-3">
+  <div class="slide-header">
+    <h2>2. 月間障害インシデント実績</h2>
+    <div class="slide-meta">atLIB インフラ運用サポート</div>
+  </div>
+  <div class="slide-body">
+    <div class="table-wrap">
+      <table class="report-table">
+        <thead>
+          <tr>
+            <th style="width:17%;">発生日時</th>
+            <th style="width:13%;">ステータス</th>
+            <th style="width:22%;">影響機器</th>
+            <th style="width:12%;">継続時間</th>
+            <th style="width:36%;">障害内容 / アラート名</th>
+          </tr>
+        </thead>
+        <tbody id="slide-incident-tbody">
+          <tr><td colspan="5" style="text-align:center;color:#78909c;padding:30px;">「データ同期」ボタンを押してください</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="slide-footer">
+    <div>CONFIDENTIAL</div>
+    <div class="footer-center">© 2026 atLIB Inc.</div>
+    <div>Page 3</div>
+  </div>
+</div>
+
+<!-- ========================================
+     スライド 4：デバイス監査
+     ======================================== -->
+<div class="slide" id="slide-4">
+  <div class="slide-header">
+    <h2>3. デバイス監査レポート</h2>
+    <div class="slide-meta">atLIB インフラ運用サポート</div>
+  </div>
+  <div class="slide-body">
+    <div class="table-wrap">
+      <table class="report-table">
+        <thead>
+          <tr>
+            <th style="width:14%;">ホスト名</th>
+            <th style="width:11%;">管理IP</th>
+            <th style="width:22%;">機器概要 (型番)</th>
+            <th style="width:8%;">FW</th>
+            <th style="width:13%;">稼働時間</th>
+            <th style="width:12%;">脆弱性</th>
+            <th style="width:11%;">EoL</th>
+            <th style="width:9%;">対応要否</th>
+          </tr>
+        </thead>
+        <tbody id="slide-inventory-tbody">
+          <tr><td colspan="8" style="text-align:center;color:#78909c;padding:30px;">「データ同期」ボタンを押してください</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="slide-footer">
+    <div>CONFIDENTIAL</div>
+    <div class="footer-center">© 2026 atLIB Inc.</div>
+    <div>Page 4</div>
+  </div>
+</div>
+
+<!-- ========================================
+     スライド 5：トポロジーマップ
+     ======================================== -->
+<div class="slide" id="slide-5">
+  <div class="slide-header">
+    <h2>4. リアルタイム・ネットワークトポロジーマップ</h2>
+    <div class="slide-meta">atLIB インフラ運用サポート</div>
+  </div>
+  <div class="slide-body">
+    <!-- バカハブ検出警告バナー -->
+    <div id="hub-alert-banner">
+      <span style="font-size:18px;">⚠️</span>
+      <span id="hub-alert-text">未管理ハブ (バカハブ) を検出しました</span>
+    </div>
+    <div id="map-container">
+      <div id="topology-report-map"></div>
+      <div class="map-legend">
+        <div class="legend-title">🔌 接続タイプ</div>
+        <div class="legend-item">
+          <div class="legend-line" style="border-top-style:solid;border-top-color:#2e7d32;"></div>
+          <span>Cat6 有線 (1Gbps)</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-line" style="border-top-style:solid;border-top-color:#e65100;"></div>
+          <span>Cat5e 有線 (100M)</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-line" style="border-top-style:dashed;border-top-color:#0288d1;"></div>
+          <span>無線LAN (Wi-Fi)</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-line" style="border-top-style:dashed;border-top-color:#e53935;border-top-width:2px;"></div>
+          <span style="color:#c62828;font-weight:700;">障害リンク</span>
+        </div>
+        <div class="legend-sep"></div>
+        <div class="legend-title">🖥️ デバイス種別</div>
+        <div class="legend-item">
+          <div class="legend-circle" style="background:#1a237e;"></div>
+          <span>ルーター / コア機</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-circle" style="background:#f57c00;"></div>
+          <span>L2/L3スイッチ</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-circle" style="background:#0288d1;"></div>
+          <span>アクセスポイント</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-circle" style="background:#7b1fa2;"></div>
+          <span>プリンター / 周辺機器</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-circle" style="background:#b71c1c;border:2px solid #ff1744;"></div>
+          <span style="color:#b71c1c;font-weight:700;">未管理ハブ（自動検出）</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-circle" style="background:#78909c;border:1px dashed #546e7a;"></div>
+          <span style="color:#78909c;">ハブ配下端末（推定）</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer">
+    <div>CONFIDENTIAL</div>
+    <div class="footer-center">© 2026 atLIB Inc.</div>
+    <div>Page 5</div>
+  </div>
+</div>
+
+<!-- ========================================
+     スライド 6：インターフェース一覧
+     ======================================== -->
+<div class="slide" id="slide-6">
+  <div class="slide-header">
+    <h2>5. デバイス属性 ＆ 物理接続インターフェース一覧</h2>
+    <div class="slide-meta">atLIB インフラ運用サポート</div>
+  </div>
+  <div class="slide-body">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <div>
+        <div class="sort-toggle" id="if-sort-toggle">
+          <button type="button" class="sort-btn" id="sort-btn-hierarchy" onclick="setIfSortMode('hierarchy')">🔀 階層順（自動）</button>
+          <button type="button" class="sort-btn" id="sort-btn-manual" onclick="setIfSortMode('manual')">✋ 手動並べ替え</button>
+        </div>
+        <span id="if-sort-hint">行をドラッグ＆ドロップして並べ替えできます</span>
+      </div>
+      <button class="btn" style="background:#5c6bc0;padding:4px 12px;font-size:11px;" onclick="addManualHostRow()">➕ 監視対象外の機器を追加</button>
+    </div>
+    <div class="table-wrap">
+      <table class="report-table">
+        <thead>
+          <tr>
+            <th style="width:20%;">機器名</th>
+            <th style="width:20%;">役割 (階層)</th>
+            <th style="width:15%;">上流ポート</th>
+            <th style="width:25%;">上流接続先</th>
+            <th style="width:20%;">接続タイプ</th>
+          </tr>
+        </thead>
+        <tbody id="manual-if-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="slide-footer">
+    <div>CONFIDENTIAL</div>
+    <div class="footer-center">© 2026 atLIB Inc.</div>
+    <div>Page 6</div>
+  </div>
+</div>
+
+<!-- ========================================
+     スライド 7：運用対応履歴
+     ======================================== -->
+<div class="slide" id="slide-7">
+  <div class="slide-header">
+    <h2>6. 運用対応履歴 ＆ 工数管理</h2>
+    <div class="slide-meta">atLIB インフラ運用サポート</div>
+  </div>
+  <div class="slide-body">
+    <div class="table-wrap">
+      <table class="report-table">
+        <thead>
+          <tr>
+            <th style="width:16%;">発生日時</th>
+            <th style="width:16%;">完了日時</th>
+            <th style="width:44%;">対応内容・処置詳細</th>
+            <th style="width:14%;">対応者</th>
+            <th style="width:10%;">工数(分)</th>
+          </tr>
+        </thead>
+        <tbody id="manual-support-tbody">
+          <tr class="manual-row">
+            <td><div contenteditable="true" class="editable-cell" id="edit-r1-c1"></div></td>
+            <td><div contenteditable="true" class="editable-cell" id="edit-r1-c2"></div></td>
+            <td><div contenteditable="true" class="editable-cell" id="edit-r1-c3"></div></td>
+            <td><div contenteditable="true" class="editable-cell" id="edit-r1-c4">運用担当</div></td>
+            <td><div contenteditable="true" class="editable-cell" id="edit-r1-c5">0</div></td>
+          </tr>
+          <tr class="manual-row">
+            <td><div contenteditable="true" class="editable-cell" id="edit-r2-c1"></div></td>
+            <td><div contenteditable="true" class="editable-cell" id="edit-r2-c2"></div></td>
+            <td><div contenteditable="true" class="editable-cell" id="edit-r2-c3"></div></td>
+            <td><div contenteditable="true" class="editable-cell" id="edit-r2-c4"></div></td>
+            <td><div contenteditable="true" class="editable-cell" id="edit-r2-c5"></div></td>
+          </tr>
+          <tr class="manual-row">
+            <td><div contenteditable="true" class="editable-cell" id="edit-r3-c1"></div></td>
+            <td><div contenteditable="true" class="editable-cell" id="edit-r3-c2"></div></td>
+            <td><div contenteditable="true" class="editable-cell" id="edit-r3-c3"></div></td>
+            <td><div contenteditable="true" class="editable-cell" id="edit-r3-c4"></div></td>
+            <td><div contenteditable="true" class="editable-cell" id="edit-r3-c5"></div></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="slide-footer">
+    <div>CONFIDENTIAL</div>
+    <div class="footer-center">© 2026 atLIB Inc.</div>
+    <div>Page 7</div>
+  </div>
+</div>
+
+<!-- ========================================
+     スライド 8：WANトラフィック
+     ======================================== -->
+<div class="slide" id="slide-8">
+  <div class="slide-header">
+    <h2>7. WAN インターフェース 月間トラフィックレポート</h2>
+    <div class="slide-meta">atLIB インフラ運用サポート<br><span id="traffic-period-label"></span></div>
+  </div>
+  <div class="slide-body" style="display:flex;flex-direction:column;gap:10px;">
+    <!-- KPI -->
+    <div class="kpi-row" style="margin-bottom:0;">
+      <div class="kpi-card">
+        <div class="kpi-label">IN ピーク</div>
+        <div class="kpi-value" id="traffic-in-peak" style="font-size:22px;color:#1565c0;">──</div>
+        <div class="kpi-sub">Mbps</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">IN 月間平均</div>
+        <div class="kpi-value" id="traffic-in-avg" style="font-size:22px;color:#1565c0;">──</div>
+        <div class="kpi-sub">Mbps</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">OUT ピーク</div>
+        <div class="kpi-value" id="traffic-out-peak" style="font-size:22px;color:#e65100;">──</div>
+        <div class="kpi-sub">Mbps</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">OUT 月間平均</div>
+        <div class="kpi-value" id="traffic-out-avg" style="font-size:22px;color:#e65100;">──</div>
+        <div class="kpi-sub">Mbps</div>
+      </div>
+    </div>
+    <!-- グラフ -->
+    <div id="traffic-chart-wrap">
+      <canvas id="traffic-chart" style="display:none;"></canvas>
+      <div id="traffic-no-data">管理パネルの <strong>WAN IF</strong> を選択してデータ同期してください</div>
+    </div>
+    <!-- IFラベル -->
+    <div style="font-size:10px;color:#b0bec5;text-align:right;" id="traffic-if-label"></div>
+  </div>
+  <div class="slide-footer">
+    <div>CONFIDENTIAL</div>
+    <div class="footer-center">© 2026 atLIB Inc.</div>
+    <div>Page 8</div>
+  </div>
+</div>
+
+<!-- ========================================
+     スライド 9：アップグレード提案
+     ======================================== -->
+<div class="slide" id="slide-9" style="border-top:8px solid #1a237e;">
+  <div class="slide-header">
+    <h2>8. 貴社の体制や方針に合わせて選べる3つのプラン</h2>
+    <div class="slide-meta">atLIB インフラ運用サポート</div>
+  </div>
+  <div class="slide-body" style="display:flex;flex-direction:column;gap:12px;">
+
+    <!-- プランカード + 矢印 -->
+    <div style="display:grid;grid-template-columns:1fr 28px 1fr 28px 1fr;gap:0;flex:1;align-items:center;">
+
+      <!-- ① スタンダード -->
+      <div style="border:1px solid #90a4ae;border-radius:10px;overflow:hidden;display:flex;flex-direction:column;height:100%;">
+        <div style="background:#1976d2;padding:14px 16px 12px;text-align:center;">
+          <div style="font-size:17px;font-weight:700;color:#fff;letter-spacing:.5px;">スタンダードプラン</div>
+          <div style="font-size:12px;color:#bbdefb;margin-top:4px;">完全丸投げ見守りプラン</div>
+        </div>
+        <div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px;flex:1;">
+          <div style="text-align:center;">
+            <div style="font-size:11px;color:#90a4ae;margin-bottom:2px;">月額費用</div>
+            <span style="font-size:32px;font-weight:700;color:#1565c0;line-height:1;">9,980</span><span style="font-size:13px;color:#546e7a;">円</span>
+            <div style="font-size:11px;color:#90a4ae;margin-top:4px;">初期費用 30,000円（機器代・初期設定込）</div>
+          </div>
+          <div style="background:#f5f5f5;border-radius:6px;padding:6px 10px;font-size:12px;color:#78909c;text-align:center;">
+            ダッシュボード：<span style="color:#b0bec5;font-weight:600;">✕ なし</span>
+          </div>
+          <div style="border-top:1px solid #eceff1;padding-top:10px;display:flex;flex-direction:column;gap:7px;">
+            <div style="display:flex;align-items:flex-start;gap:7px;font-size:13px;color:#37474f;">
+              <span style="color:#1976d2;font-weight:700;flex-shrink:0;">✓</span>導入初日のセキュリティ診断
+            </div>
+            <div style="display:flex;align-items:flex-start;gap:7px;font-size:13px;color:#37474f;">
+              <span style="color:#1976d2;font-weight:700;flex-shrink:0;">✓</span>未知の機器の自動検知・警告
+            </div>
+            <div style="display:flex;align-items:flex-start;gap:7px;font-size:13px;color:#37474f;">
+              <span style="color:#1976d2;font-weight:700;flex-shrink:0;">✓</span>月次インフラ健全性レポート
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 矢印① -->
+      <div style="text-align:center;color:#90a4ae;font-size:20px;line-height:1;">▶</div>
+
+      <!-- ② アドバンスド -->
+      <div style="border:2px solid #1565c0;border-radius:10px;overflow:hidden;display:flex;flex-direction:column;height:100%;box-shadow:0 3px 12px rgba(21,101,192,.18);">
+        <div style="background:linear-gradient(135deg,#1565c0 0%,#1a237e 100%);padding:14px 16px 12px;text-align:center;">
+          <div style="font-size:17px;font-weight:700;color:#fff;letter-spacing:.5px;">アドバンスドプラン</div>
+          <div style="font-size:12px;color:#90caf9;margin-top:4px;">ノータッチ運用保守</div>
+        </div>
+        <div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px;flex:1;">
+          <div style="text-align:center;">
+            <div style="font-size:11px;color:#90a4ae;margin-bottom:2px;">月額費用</div>
+            <span style="font-size:32px;font-weight:700;color:#1565c0;line-height:1;">29,800</span><span style="font-size:13px;color:#546e7a;">円</span>
+            <div style="font-size:11px;color:#90a4ae;margin-top:4px;">初期費用 30,000円 ＋ 50,000円〜（設計費）</div>
+          </div>
+          <div style="background:#e3f2fd;border-radius:6px;padding:6px 10px;font-size:12px;color:#1565c0;text-align:center;font-weight:600;">
+            ダッシュボード：〇 あり
+          </div>
+          <div style="background:#f0f4ff;border-radius:6px;padding:7px 10px;font-size:12px;color:#1565c0;font-weight:600;">
+            ＋ スタンダードの全機能を含む
+          </div>
+          <div style="border-top:1px solid #eceff1;padding-top:10px;display:flex;flex-direction:column;gap:7px;">
+            <div style="display:flex;align-items:flex-start;gap:7px;font-size:13px;color:#37474f;">
+              <span style="color:#1565c0;font-weight:700;flex-shrink:0;">✓</span>専用監視ダッシュボード解放
+            </div>
+            <div style="display:flex;align-items:flex-start;gap:7px;font-size:13px;color:#37474f;">
+              <span style="color:#1565c0;font-weight:700;flex-shrink:0;">✓</span>機器の定期自動再起動
+            </div>
+            <div style="display:flex;align-items:flex-start;gap:7px;font-size:13px;color:#37474f;">
+              <span style="color:#1565c0;font-weight:700;flex-shrink:0;">✓</span>遠隔セキュリティパッチ適用
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 矢印② -->
+      <div style="text-align:center;color:#90a4ae;font-size:20px;line-height:1;">▶</div>
+
+      <!-- ③ プロ -->
+      <div style="border:1px solid #90a4ae;border-radius:10px;overflow:hidden;display:flex;flex-direction:column;height:100%;">
+        <div style="background:#1a237e;padding:14px 16px 12px;text-align:center;">
+          <div style="font-size:17px;font-weight:700;color:#fff;letter-spacing:.5px;">プロプラン</div>
+          <div style="font-size:12px;color:#9fa8da;margin-top:4px;">リモートインフラ実務代行</div>
+        </div>
+        <div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px;flex:1;">
+          <div style="text-align:center;">
+            <div style="font-size:11px;color:#90a4ae;margin-bottom:2px;">月額費用</div>
+            <span style="font-size:32px;font-weight:700;color:#1565c0;line-height:1;">79,800</span><span style="font-size:13px;color:#546e7a;">円</span>
+            <div style="font-size:11px;color:#90a4ae;margin-top:4px;">初期費用 30,000円 ＋ 50,000円〜（設計費）</div>
+          </div>
+          <div style="background:#e3f2fd;border-radius:6px;padding:6px 10px;font-size:12px;color:#1565c0;text-align:center;font-weight:600;">
+            ダッシュボード：〇 あり
+          </div>
+          <div style="background:#f0f4ff;border-radius:6px;padding:7px 10px;font-size:12px;color:#1565c0;font-weight:600;">
+            ＋ アドバンスドの全機能を含む
+          </div>
+          <div style="border-top:1px solid #eceff1;padding-top:10px;display:flex;flex-direction:column;gap:7px;">
+            <div style="display:flex;align-items:flex-start;gap:7px;font-size:13px;color:#37474f;">
+              <span style="color:#1a237e;font-weight:700;flex-shrink:0;">✓</span>遠隔設定変更対応（VPN・Wi-Fi等・月4回）
+            </div>
+            <div style="display:flex;align-items:flex-start;gap:7px;font-size:13px;color:#37474f;">
+              <span style="color:#1a237e;font-weight:700;flex-shrink:0;">✓</span>お困りごとリモートサポート窓口
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 注記・問い合わせ -->
+    <div style="border-top:1px solid #cfd8dc;padding-top:10px;display:flex;justify-content:space-between;align-items:center;gap:16px;">
+      <div style="font-size:11px;color:#90a4ae;line-height:1.7;flex:1;">
+        ※ネットワークの抜本的な刷新や、DX戦略の策定をご希望の場合は、atLIBコンサルティングサービスへご相談ください。
+      </div>
+      <div style="display:flex;align-items:center;gap:16px;flex-shrink:0;">
+        <div style="text-align:right;">
+          <div style="display:flex;align-items:center;justify-content:flex-end;gap:7px;margin-bottom:4px;">
+            <img src="atlib_icon.png" alt="atLIB Icon" style="height:20px;" onerror="this.style.display='none'">
+            <span style="font-size:14px;font-weight:700;color:#1a237e;">atLIB株式会社</span>
+          </div>
+          <div style="font-size:11px;color:#546e7a;line-height:1.8;">
+            東京都中央区八丁堀4-12-7&ensp;|&ensp;sales@atlib.jp&ensp;|&ensp;03-6661-1616
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <div class="slide-footer">
+    <div>CONFIDENTIAL</div>
+    <div class="footer-center">© 2026 atLIB Inc.</div>
+    <div>Page 9</div>
+  </div>
+</div>
+
+<!-- ===================================================================
+     JavaScript
+     =================================================================== -->
+<script>
+'use strict';
+
+/* ---- 設定 ---- */
+const API_URL = 'api-bridge.php';
+
+/* ---- 編集可能セルのID一覧 ---- */
+const EDIT_IDS = [
+  'edit-r1-c1','edit-r1-c2','edit-r1-c3','edit-r1-c4','edit-r1-c5',
+  'edit-r2-c1','edit-r2-c2','edit-r2-c3','edit-r2-c4','edit-r2-c5',
+  'edit-r3-c1','edit-r3-c2','edit-r3-c3','edit-r3-c4','edit-r3-c5',
+  'edit-sla-score','edit-sla-status','edit-sla-percent'
+];
+
+/* ---- グローバル状態 ---- */
+let globalTopologyNodes  = [];
+let globalTopologyEdges  = [];
+let cachedActiveHosts    = [];
+let detectedHubs         = [];   // バカハブ情報キャッシュ
+let visNetworkInstance   = null;
+let globalAllH           = [];   // ホストキャッシュ（トラフィック用）
+let globalItems          = [];   // アイテムキャッシュ（トラフィック用）
+let trafficChartInstance = null;
+
+/* ---- インターフェース一覧 並べ替え状態 ---- */
+let ifSortMode      = localStorage.getItem('atlib_if_sort_mode') || 'hierarchy'; // 'hierarchy' | 'manual'
+let lastIfAllH       = [];   // 直近の _renderInterfaceTable 呼び出し引数キャッシュ（再描画用）
+let lastIfManualHosts = [];
+let ifDragSrcName    = null;
+
+/* ==================================================
+   ステータスバー
+   ================================================== */
+function showStatus(type, msg) {
+  const bar  = document.getElementById('status-bar');
+  const icon = document.getElementById('status-icon');
+  const txt  = document.getElementById('status-msg');
+  bar.className = type;
+  icon.textContent = type === 'info' ? '⏳' : type === 'success' ? '✅' : '❌';
+  txt.textContent  = msg;
+  if (type === 'success') setTimeout(() => { bar.className = ''; bar.style.display = 'none'; }, 4000);
+}
+function hideStatus() {
+  const bar = document.getElementById('status-bar');
+  bar.className = '';
+  bar.style.display = 'none';
+}
+
+/* ==================================================
+   localStorage — 編集可能セルの永続化
+   ================================================== */
+function saveEditableContent() {
+  EDIT_IDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) localStorage.setItem('atlib_edit_' + id, el.innerText);
+  });
+}
+
+function loadEditableContent() {
+  EDIT_IDS.forEach(id => {
+    const el   = document.getElementById(id);
+    const saved = localStorage.getItem('atlib_edit_' + id);
+    if (el && saved !== null) el.innerText = saved;
+    if (el) el.addEventListener('input', saveEditableContent);
+  });
+}
+
+/* ==================================================
+   Zabbix API ヘルパー
+   ================================================== */
+async function zbxCall(method, params, id) {
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', method, params, id })
+  });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const json = await res.json();
+  if (json.error) throw new Error(json.error.data || json.error.message);
+  return json.result;
+}
+
+/* ==================================================
+   ホストグループ読み込み
+   ================================================== */
+async function loadHostGroups() {
+  try {
+    const groups = await zbxCall('hostgroup.get', { output: ['groupid','name'] }, 100);
+    const sel = document.getElementById('target-group');
+    sel.innerHTML = '<option value="">── 顧客選択 ──</option>';
+    groups
+      .filter(g => g.name.includes('/'))
+      .sort((a, b) => a.name.localeCompare(b.name, 'ja'))
+      .forEach(g => {
+        const opt = document.createElement('option');
+        opt.value = g.groupid;
+        opt.textContent = g.name;
+        sel.appendChild(opt);
+      });
+  } catch (e) {
+    console.error('loadHostGroups:', e);
+  }
+}
+
+/* ==================================================
+   グループ内ホスト読み込み
+   ================================================== */
+async function loadHostsInGroup() {
+  const groupId = document.getElementById('target-group').value;
+  const sel = document.getElementById('target-host');
+  sel.innerHTML = '<option value="">── デバイス選択 ──</option>';
+  if (!groupId) return;
+  try {
+    const hosts = await zbxCall('host.get', { groupids: groupId, output: ['hostid','name'] }, 101);
+    const allOpt = document.createElement('option');
+    allOpt.value = 'all'; allOpt.textContent = '⚠️ グループ内全ホスト一括';
+    sel.appendChild(allOpt);
+    hosts.forEach(h => {
+      const opt = document.createElement('option');
+      opt.value = h.hostid; opt.textContent = h.name;
+      sel.appendChild(opt);
+    });
+  } catch (e) {
+    console.error('loadHostsInGroup:', e);
+  }
+}
+
+/* ==================================================
+   データ同期メイン
+   ================================================== */
+async function refreshReportData() {
+  const gSel = document.getElementById('target-group');
+  if (!gSel.value) { alert('顧客を選択してください'); return; }
+
+  showStatus('info', 'Zabbix からデータを取得中...');
+
+  const hSel   = document.getElementById('target-host');
+  const isAll  = hSel.value === 'all' || hSel.value === '';
+  const reqHost = isAll ? undefined : hSel.value;
+  const reqGroup = isAll ? [gSel.value] : undefined;
+
+  const year  = parseInt(document.getElementById('target-year').value, 10);
+  const month = parseInt(document.getElementById('target-month').value, 10);
+  const tFrom = Math.floor(new Date(year, month - 1, 1).getTime() / 1000);
+  const tTill = Math.floor(new Date(year, month, 1).getTime() / 1000) - 1;
+  const tSec  = tTill - tFrom + 1;
+
+  /* ラベル更新 */
+  const rawName = gSel.options[gSel.selectedIndex].text;
+  const custName = rawName.includes('/') ? rawName.split('/').pop() : rawName;
+  document.getElementById('lbl-customer').textContent = custName;
+  const periodLabel = `${year}年${String(month).padStart(2,'0')}月度`;
+  document.getElementById('lbl-period').textContent = `対象期間：${periodLabel}`;
+  document.getElementById('lbl-period-s2').textContent = periodLabel;
+  document.getElementById('lbl-date').textContent = new Date().toLocaleDateString('ja-JP');
+
+  try {
+    /* ---- ① インシデント取得 ---- */
+    showStatus('info', 'インシデントデータ取得中...');
+    const events = await zbxCall('event.get', {
+      hostids: reqHost, groupids: reqGroup,
+      output: ['eventid','clock','name','value','objectid'],
+      selectHosts: ['name'],
+      time_from: tFrom, time_till: tTill,
+      sortfield: 'clock', sortorder: 'DESC', limit: 100
+    }, 12);
+
+    _renderIncidents(events, tFrom, tSec);
+
+    /* ---- ② ホスト＋アイテム取得 ---- */
+    showStatus('info', 'ホスト・アイテム情報取得中...');
+    const allH = await zbxCall('host.get', {
+      hostids: reqHost, groupids: reqGroup,
+      output: ['hostid','name'],
+      selectInterfaces: ['ip'],
+      selectInventory: ['date_hw_expiry'],
+      selectTags: 'extend',
+      selectTriggers: ['description','value']
+    }, 31);
+
+    const hIds = allH.map(h => h.hostid);
+    const items = hIds.length > 0 ? await zbxCall('item.get', {
+      hostids: hIds,
+      output: ['itemid','hostid','name','lastvalue','key_'],
+      searchWildcardsEnabled: true
+    }, 2) : [];
+
+    /* ---- ③ ARPテーブル取得（バカハブ検出） ---- */
+    showStatus('info', 'ARPテーブル解析中（未管理ハブ検出）...');
+    await _detectUnmanagedHubs(hIds, items, allH);
+
+    /* ---- ④ 各スライド描画 ---- */
+    _renderInventory(allH, items);
+    _buildTopologyData(allH, items);
+    _renderTopologyMap();
+
+    /* ---- KPI更新 ---- */
+    document.getElementById('kpi-hosts').textContent = allH.length;
+    document.getElementById('kpi-unknown').textContent = detectedHubs.length;
+
+    /* ---- トラフィックスライド更新 ---- */
+    globalAllH  = allH;
+    globalItems = items;
+    _populateWanSelector();
+    await _fetchAndRenderTraffic();
+
+    showStatus('success', 'データ同期完了 ✔');
+  } catch (e) {
+    console.error('refreshReportData:', e);
+    showStatus('error', 'データ取得エラー: ' + e.message);
+  }
+}
+
+/* --------------------------------------------------
+   インシデント描画
+   -------------------------------------------------- */
+function _renderIncidents(events, tFrom, tSec) {
+  const tbody = document.getElementById('slide-incident-tbody');
+  tbody.innerHTML = '';
+
+  let tDown = 0;
+  let incidentCount = 0;
+  const actInc = {};
+
+  if (events && events.length > 0) {
+    const chron = [...events].reverse();
+    chron.forEach(ev => {
+      if (ev.value === '1') {
+        actInc[ev.objectid] = parseInt(ev.clock, 10);
+        incidentCount++;
+      } else if (ev.value === '0' && actInc[ev.objectid]) {
+        const dur = parseInt(ev.clock, 10) - actInc[ev.objectid];
+        if (dur > 0) tDown += dur;
+        delete actInc[ev.objectid];
+      }
+    });
+    const cEnd = Math.min(Math.floor(Date.now() / 1000), tFrom + tSec - 1);
+    for (const id in actInc) {
+      const dur = cEnd - actInc[id];
+      if (dur > 0) tDown += dur;
+    }
+
+    events.forEach(ev => {
+      const tr = document.createElement('tr');
+      const time   = new Date(ev.clock * 1000).toLocaleString('ja-JP');
+      const status = ev.value === '1'
+        ? '<span class="badge badge-critical">障害検知</span>'
+        : '<span class="badge badge-success">復旧済</span>';
+      const hName  = ev.hosts && ev.hosts[0] ? ev.hosts[0].name : '共通';
+      /* 継続時間計算（障害→復旧ペア） */
+      let durStr = '──';
+      if (ev.value === '0') {
+        const pair = chron.find(e => e.objectid === ev.objectid && e.value === '1' && e.clock <= ev.clock);
+        if (pair) {
+          const s = parseInt(ev.clock, 10) - parseInt(pair.clock, 10);
+          const m = Math.floor(s / 60), h = Math.floor(m / 60);
+          durStr = h > 0 ? `${h}h${m % 60}m` : `${m}m`;
+        }
+      } else {
+        durStr = '<span style="color:#c62828;font-size:10px;">継続中</span>';
+      }
+      tr.innerHTML = `<td>${time}</td><td>${status}</td><td><strong>${hName}</strong></td><td>${durStr}</td><td>${ev.name}</td>`;
+      tbody.appendChild(tr);
+    });
+  }
+
+  if (tbody.innerHTML === '') {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:30px;color:#78909c;">月間インシデントなし ✔</td></tr>';
+  }
+
+  /* SLAスコア計算 */
+  const slaP = ((tSec - tDown) / tSec * 100).toFixed(2);
+  const scoreEl   = document.getElementById('edit-sla-score');
+  const statusEl  = document.getElementById('edit-sla-status');
+  const percentEl = document.getElementById('edit-sla-percent');
+  const gaugeEl   = document.getElementById('sla-gauge-fill');
+  const colorEl   = document.getElementById('sla-score-color');
+
+  const slaNum = parseFloat(slaP);
+  let grade = 'A', statusText = '健全（SLA適合）', colorClass = '#2e7d32', badgeClass = 'badge-success';
+  if (slaNum < 99.0)  { grade = 'C'; statusText = 'SLA未達'; colorClass = '#c62828'; badgeClass = 'badge-critical'; }
+  else if (slaNum < 99.9) { grade = 'B'; statusText = '要観察'; colorClass = '#e65100'; badgeClass = 'badge-warning'; }
+
+  scoreEl.textContent  = grade;
+  percentEl.textContent = slaP + '%';
+  statusEl.textContent  = statusText;
+  statusEl.className    = `editable-inline badge ${badgeClass}`;
+  colorEl.style.color   = colorClass;
+  gaugeEl.style.width   = Math.min(slaNum, 100) + '%';
+  gaugeEl.style.background = slaNum >= 99.9
+    ? 'linear-gradient(90deg,#43a047,#2e7d32)'
+    : slaNum >= 99.0
+      ? 'linear-gradient(90deg,#ff8f00,#e65100)'
+      : 'linear-gradient(90deg,#e53935,#b71c1c)';
+
+  document.getElementById('kpi-incidents').textContent = incidentCount;
+  document.getElementById('kpi-downtime').textContent  = Math.round(tDown / 60);
+}
+
+/* --------------------------------------------------
+   デバイス監査描画
+   -------------------------------------------------- */
+function _renderInventory(allH, items) {
+  const tbody = document.getElementById('slide-inventory-tbody');
+  tbody.innerHTML = '';
+
+  /* sec_* タグ取得ヘルパー */
+  const secTag = (tags, name) => { const t = (tags || []).find(t => t.tag === name); return t ? t.value : null; };
+
+  allH.forEach(h => {
+    const hItems = items.filter(i => i.hostid === h.hostid);
+    const secRisk     = secTag(h.tags, 'sec_risk');
+    const secCveCount = secTag(h.tags, 'sec_cve_count');
+    const secKevCount = secTag(h.tags, 'sec_kev_count');
+    const secEolDate  = secTag(h.tags, 'sec_eol_date');
+    const secChecked  = secTag(h.tags, 'sec_checked_date');
+    const dItem  = hItems.find(i => i.key_.includes('system.descr'));
+    let uItem    = hItems.find(i => i.key_.includes('uptime') && i.name.toLowerCase().includes('network'));
+    if (!uItem)  uItem = hItems.find(i => i.key_.includes('uptime'));
+
+    /* 稼働時間 */
+    let uStr = '計測中...', uDay = 0;
+    if (uItem && uItem.lastvalue) {
+      const ts = parseInt(uItem.lastvalue, 10);
+      if (!isNaN(ts)) {
+        uDay = Math.floor(ts / 86400);
+        uStr = `${uDay}日 ${Math.floor((ts % 86400) / 3600)}時間`;
+      }
+    }
+
+    /* 機器説明・バージョン */
+    const dVal = dItem ? dItem.lastvalue : '';
+    const verM = dVal.match(/Ver(?:sion)?[\s.]?([0-9.]+)/i);
+    const ver  = verM ? `Ver ${verM[2] || verM[1]}` : '未特定';
+    const dStr = dVal ? dVal.split(',')[0].trim().split(/\s+/).slice(0, 4).join(' ') : 'データ未取得';
+
+    /* EoL — date_hw_expiry 優先、なければ sec_eol_date タグ */
+    let eolStr = '情報なし';
+    if (h.inventory && h.inventory.date_hw_expiry) eolStr = h.inventory.date_hw_expiry.trim();
+    else if (secEolDate) eolStr = secEolDate;
+
+    /* 脆弱性 — バッチ sec_* タグ優先、なければ Zabbix トリガー */
+    let vulnHtml = '<span style="color:#2e7d32;font-weight:700;">検出なし</span>';
+    let hasVuln  = false;
+    if (secCveCount !== null) {
+      const cnt = parseInt(secCveCount, 10);
+      if (cnt > 0) {
+        const kevStr = secKevCount && secKevCount !== '0'
+          ? `<br><span style="color:#b71c1c;font-size:9px;">うち KEV掲載: ${secKevCount}件</span>` : '';
+        vulnHtml = `<span style="color:#c62828;font-size:10px;">⚠️ CVE ${cnt}件</span>${kevStr}`;
+        if (secChecked) vulnHtml += `<br><span style="color:#90a4ae;font-size:9px;">確認:${secChecked}</span>`;
+        hasVuln = true;
+      } else {
+        const checkedStr = secChecked
+          ? `<br><span style="color:#90a4ae;font-size:9px;">確認:${secChecked}</span>` : '';
+        vulnHtml = `<span style="color:#2e7d32;font-weight:700;">検出なし</span>${checkedStr}`;
+      }
+    } else if (h.triggers && h.triggers.length > 0) {
+      const vT = h.triggers.filter(t => t.value === '1' && (
+        t.description.toUpperCase().includes('CVE') || t.description.includes('脆弱性')
+      ));
+      if (vT.length > 0) {
+        vulnHtml = vT.map(t => `<span style="color:#c62828;font-size:10px;">⚠️ ${t.description}</span>`).join('<br>');
+        hasVuln = true;
+      }
+    }
+
+    /* 対応要否バッジ — バッチの sec_risk タグを優先 */
+    let actionBadge = '<span class="badge badge-success">対応不要</span>';
+    if (secRisk) {
+      const riskMap = {
+        critical: '<span class="badge badge-critical">要対応</span>',
+        high:     '<span class="badge badge-warning">要確認</span>',
+        medium:   '<span class="badge badge-info">要監視</span>',
+        warning:  '<span class="badge badge-warning">要計画</span>',
+        ok:       '<span class="badge badge-success">対応不要</span>',
+      };
+      actionBadge = riskMap[secRisk] || actionBadge;
+    } else {
+      if (uDay >= 365) actionBadge = '<span class="badge badge-warning">要再起動</span>';
+      if (hasVuln)     actionBadge = '<span class="badge badge-warning">要パッチ</span>';
+      if (eolStr !== '情報なし') {
+        const eT = new Date(eolStr.replace(/-/g, '/')).getTime();
+        if (!isNaN(eT)) {
+          if (eT < Date.now()) actionBadge = '<span class="badge badge-critical">要交換</span>';
+          else if (eT <= Date.now() + 31536000000) actionBadge = '<span class="badge badge-warning">要計画</span>';
+        }
+      }
+    }
+
+    const ip = h.interfaces && h.interfaces[0] ? h.interfaces[0].ip : '───';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><strong>${h.name}</strong></td>
+      <td><code style="font-size:10.5px;">${ip}</code></td>
+      <td style="color:#546e7a;font-size:11px;">${dStr}</td>
+      <td><span class="badge badge-neutral">${ver}</span></td>
+      <td><strong style="color:#1565c0;">${uStr}</strong></td>
+      <td>${vulnHtml}</td>
+      <td><code style="font-size:10px;">${eolStr}</code></td>
+      <td>${actionBadge}</td>`;
+    tbody.appendChild(tr);
+  });
+
+  if (tbody.innerHTML === '') {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:30px;color:#78909c;">資産データなし</td></tr>';
+  }
+}
+
+/* ==================================================
+   バカハブ自動検出
+   判定条件：
+     1. AP役割のホストは除外（無線クライアントの集約は正常動作）
+     2. LLDPネイバーが確認できるポートは除外（管理対象機器が接続済み）
+     3. JSON内にネイバー情報が含まれる場合も除外
+     4. アップリンクポート（最小MAC数）は除外
+     5. 残ったポートでMAC数が閾値以上 → バカハブ判定
+   ================================================== */
+async function _detectUnmanagedHubs(hIds, items, allH) {
+  detectedHubs = [];
+  if (hIds.length === 0) return;
+
+  const HUB_THRESHOLD            = 4;   // 閾値：4台以上
+  const HIGH_CONFIDENCE_THRESHOLD = 20;  // 高確度：20台以上
+
+  const hubItems = items.filter(i =>
+    i.key_ === 'snmp.hub.mac.max.count' ||
+    i.key_.toLowerCase().includes('hub.mac.max.count')
+  );
+
+  if (hubItems.length === 0) {
+    console.log('[バカハブ検出] 対象アイテムなし');
+    return;
+  }
+
+  hubItems.forEach(item => {
+    if (!item.lastvalue) return;
+
+    const host     = allH.find(h => h.hostid === item.hostid);
+    const hostName = host ? host.name : `HostID:${item.hostid}`;
+
+    /* ── 除外①: AP役割のホスト ──
+       APは複数の無線クライアントMACを集約するため誤検知になる */
+    const hostRole = ls(`m-if-role-${hostName}`) || 'other';
+    if (hostRole === 'ap') {
+      console.log(`[バカハブ検出] ${hostName}: AP役割のためスキップ`);
+      return;
+    }
+
+    /* ── LLDPネイバーポート一覧を構築 ──
+       このホストのLLDP sysname アイテムを探し、キーからポート番号を抽出する。
+       LLDPネイバーが存在 = 管理対象機器が接続 = バカハブではない */
+    const lldpPortsWithNeighbor = new Set();
+    items
+      .filter(i => i.hostid === item.hostid &&
+                   i.key_.includes('lldp.rem') &&
+                   i.key_.includes('sysname') &&
+                   i.lastvalue)
+      .forEach(li => {
+        /* キー例: lldp.rem.sysname[1.1] / lldp.rem[1,sysname] など
+           最初の数値トークンをポートインデックスとして扱う */
+        const m = li.key_.match(/\[(\d+)/);
+        if (m) lldpPortsWithNeighbor.add(parseInt(m[1], 10));
+      });
+
+    console.log(`[バカハブ検出] ${hostName}: LLDPポート=[${[...lldpPortsWithNeighbor].join(',')}]`);
+
+    let data;
+    try {
+      data = JSON.parse(item.lastvalue);
+    } catch (e) {
+      console.error(`[バカハブ検出] JSON解析エラー (${hostName}):`, e);
+      return;
+    }
+
+    if (!data || !Array.isArray(data.portStats)) {
+      console.warn(`[バカハブ検出] ${hostName}: portStats が不正`);
+      return;
+    }
+
+    const parentHostId = `host-${item.hostid}`;
+
+    /* アップリンクポート推定（ポート群の中でMAC数が最小かつ2以下） */
+    let uplinkPort = null;
+    if (data.portStats.length > 1) {
+      const minEntry = data.portStats.reduce((a, b) => a.macCount <= b.macCount ? a : b);
+      if (minEntry.macCount <= 2) uplinkPort = minEntry.port;
+    }
+
+    data.portStats.forEach(ps => {
+      const port     = ps.port;
+      const macCount = ps.macCount || 0;
+
+      /* 除外②: アップリンクポート */
+      if (port === uplinkPort) {
+        console.log(`[バカハブ検出] IF${port}: アップリンクのためスキップ`);
+        return;
+      }
+
+      /* 除外③: LLDPネイバーが確認済みのポート（管理対象機器） */
+      if (lldpPortsWithNeighbor.has(port)) {
+        console.log(`[バカハブ検出] IF${port}: LLDPネイバーあり → スキップ`);
+        return;
+      }
+
+      /* 除外④: JSONにネイバー情報が直接含まれている場合 */
+      if (ps.lldpNeighbor || ps.lldpSysname || ps.neighbor) {
+        console.log(`[バカハブ検出] IF${port}: JSON内ネイバー情報あり → スキップ`);
+        return;
+      }
+
+      /* 除外⑤: MAC数が閾値未満 */
+      if (macCount < HUB_THRESHOLD) return;
+
+      const confidence = macCount >= HIGH_CONFIDENCE_THRESHOLD ? 'high' : 'medium';
+      detectedHubs.push({
+        id:           `hub-${item.hostid}-if${port}`,
+        label:        `未管理ハブ疑い\n(${hostName} IF${port})`,
+        parentHostId: parentHostId,
+        port:         port,
+        macCount:     macCount,
+        confidence:   confidence,
+        hostName:     hostName
+      });
+      console.log(`[バカハブ検出] ✓ ${hostName} IF${port}: ${macCount}台 (確度:${confidence})`);
+    });
+  });
+
+  /* 警告バナー更新 */
+  const banner    = document.getElementById('hub-alert-banner');
+  const alertText = document.getElementById('hub-alert-text');
+  if (detectedHubs.length > 0) {
+    banner.classList.add('visible');
+    const details = detectedHubs.map(h =>
+      `${h.confidence === 'high' ? '🔴' : '🟡'}${h.hostName}/IF${h.port}(${h.macCount}台)`
+    ).join(' | ');
+    alertText.textContent = `⚠️ 未管理ハブ（バカハブ）を ${detectedHubs.length} 箇所で検出: ${details}`;
+  } else {
+    banner.classList.remove('visible');
+  }
+  console.log(`[バカハブ検出] 最終結果: ${detectedHubs.length}件`, detectedHubs);
+}
+
+/* ==================================================
+   トポロジーデータ構築
+   ================================================== */
+function _buildTopologyData(allH, items) {
+  globalTopologyNodes = [];
+  globalTopologyEdges = [];
+  cachedActiveHosts   = allH.map(h => h.name);
+
+  allH.forEach(h => {
+    const hItems = items.filter(i => i.hostid === h.hostid);
+    const ip     = h.interfaces && h.interfaces[0] ? h.interfaces[0].ip : '──';
+    globalTopologyNodes.push({ id: `host-${h.hostid}`, name: h.name, ip });
+
+    /* LLDPネイバー情報をエッジとして追加 */
+    const lldpSys  = hItems.find(i => i.key_.includes('lldp.rem') && i.key_.includes('sysname'));
+    const lldpPort = hItems.find(i => i.key_.includes('lldp.rem') && i.key_.includes('port'));
+    if (lldpSys && lldpSys.lastvalue) {
+      globalTopologyEdges.push({
+        fromName: h.name,
+        toName:   lldpSys.lastvalue.trim(),
+        port:     lldpPort ? lldpPort.lastvalue : ''
+      });
+    }
+  });
+
+  /* 手動追加ホストも含める */
+  const manualHosts = JSON.parse(localStorage.getItem('atlib_manual_hosts') || '[]');
+  manualHosts.forEach((hName, idx) => {
+    globalTopologyNodes.push({ id: `manual-${idx}`, name: hName, ip: '監視外' });
+    cachedActiveHosts.push(hName);
+  });
+
+  /* インターフェース一覧スライドを再描画 */
+  _renderInterfaceTable(allH, manualHosts);
+}
+
+/* ==================================================
+   インターフェース一覧 並べ替えロジック
+   ================================================== */
+const IF_ROLE_ORDER = { router:0, switch:1, ap:2, printer:3, other:4 };
+
+/* 「上流接続先」の連鎖から階層（親子関係）を求め、
+   ルート（上流未接続 or 対象外に接続）→ 子 → 孫... の順に並べる */
+function _computeHierarchyOrder(entries) {
+  const byName = {};
+  entries.forEach(e => { byName[e.name] = e; });
+
+  const childrenMap = {};
+  entries.forEach(e => {
+    const parent = (e.remote || '').trim();
+    if (parent && byName[parent] && parent !== e.name) {
+      (childrenMap[parent] = childrenMap[parent] || []).push(e.name);
+    }
+  });
+
+  const byRoleThenName = (a, b) =>
+    (IF_ROLE_ORDER[a.role] ?? 4) - (IF_ROLE_ORDER[b.role] ?? 4) || a.name.localeCompare(b.name, 'ja');
+
+  const isRoot = e => {
+    const parent = (e.remote || '').trim();
+    return !parent || !byName[parent] || parent === e.name;
+  };
+  const roots = entries.filter(isRoot).sort(byRoleThenName);
+
+  const visited = new Set();
+  const order = [];
+  function visit(name, depth) {
+    if (visited.has(name)) return;
+    visited.add(name);
+    const e = byName[name];
+    if (!e) return;
+    order.push({ name, depth });
+    (childrenMap[name] || [])
+      .map(n => byName[n]).filter(Boolean)
+      .sort(byRoleThenName)
+      .forEach(k => visit(k.name, depth + 1));
+  }
+  roots.forEach(r => visit(r.name, 0));
+  /* 循環参照などでルートから辿れなかったホストは末尾にまとめて追加 */
+  entries.filter(e => !visited.has(e.name)).sort(byRoleThenName).forEach(e => visit(e.name, 0));
+
+  return order;
+}
+
+/* 手動並べ替え順を localStorage から取得。新規ホストは階層順で末尾に追加して保存 */
+function _getManualOrder(entries) {
+  const byName = {};
+  entries.forEach(e => { byName[e.name] = e; });
+
+  const saved = JSON.parse(ls('atlib_if_manual_order') || '[]');
+  const seen  = new Set();
+  const order = [];
+  saved.forEach(name => {
+    if (byName[name] && !seen.has(name)) { order.push(name); seen.add(name); }
+  });
+
+  const missing = entries.filter(e => !seen.has(e.name));
+  if (missing.length > 0) {
+    _computeHierarchyOrder(missing).forEach(m => { order.push(m.name); seen.add(m.name); });
+  }
+
+  lss('atlib_if_manual_order', JSON.stringify(order));
+  return order;
+}
+
+function setIfSortMode(mode) {
+  ifSortMode = mode;
+  lss('atlib_if_sort_mode', mode);
+  _updateIfSortToggleUI();
+  if (lastIfAllH.length > 0 || lastIfManualHosts.length > 0) {
+    _renderInterfaceTable(lastIfAllH, lastIfManualHosts);
+  }
+}
+
+function _updateIfSortToggleUI() {
+  const hBtn = document.getElementById('sort-btn-hierarchy');
+  const mBtn = document.getElementById('sort-btn-manual');
+  if (!hBtn || !mBtn) return;
+  hBtn.classList.toggle('active', ifSortMode !== 'manual');
+  mBtn.classList.toggle('active', ifSortMode === 'manual');
+  const hint = document.getElementById('if-sort-hint');
+  if (hint) hint.style.display = ifSortMode === 'manual' ? 'inline' : 'none';
+}
+
+/* ---- 行のドラッグ＆ドロップ（手動並べ替えモード時のみ） ---- */
+function onIfRowDragStart(e) {
+  ifDragSrcName = e.currentTarget.dataset.ifName;
+  e.dataTransfer.effectAllowed = 'move';
+  try { e.dataTransfer.setData('text/plain', ifDragSrcName); } catch (_) {}
+  e.currentTarget.classList.add('dragging');
+}
+function onIfRowDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const tr = e.currentTarget;
+  if (!ifDragSrcName || tr.dataset.ifName === ifDragSrcName) return;
+  const rect   = tr.getBoundingClientRect();
+  const before = (e.clientY - rect.top) < rect.height / 2;
+  tr.classList.toggle('drag-over-top', before);
+  tr.classList.toggle('drag-over-bottom', !before);
+}
+function onIfRowDragLeave(e) {
+  e.currentTarget.classList.remove('drag-over-top', 'drag-over-bottom');
+}
+function onIfRowDrop(e) {
+  e.preventDefault();
+  const tr = e.currentTarget;
+  const targetName = tr.dataset.ifName;
+  tr.classList.remove('drag-over-top', 'drag-over-bottom');
+  if (!ifDragSrcName || ifDragSrcName === targetName) return;
+
+  const order = JSON.parse(ls('atlib_if_manual_order') || '[]');
+  const from = order.indexOf(ifDragSrcName);
+  if (from === -1) return;
+  order.splice(from, 1);
+
+  let to = order.indexOf(targetName);
+  if (to === -1) to = order.length;
+  const rect   = tr.getBoundingClientRect();
+  const before = (e.clientY - rect.top) < rect.height / 2;
+  order.splice(before ? to : to + 1, 0, ifDragSrcName);
+
+  lss('atlib_if_manual_order', JSON.stringify(order));
+  ifDragSrcName = null;
+  _renderInterfaceTable(lastIfAllH, lastIfManualHosts);
+}
+function onIfRowDragEnd(e) {
+  e.currentTarget.classList.remove('dragging');
+  document.querySelectorAll('#manual-if-tbody tr').forEach(r => r.classList.remove('drag-over-top', 'drag-over-bottom'));
+  ifDragSrcName = null;
+}
+
+/* ==================================================
+   インターフェーステーブル描画
+   ================================================== */
+function _renderInterfaceTable(allH, manualHosts) {
+  lastIfAllH        = allH;
+  lastIfManualHosts = manualHosts;
+
+  const mT = document.getElementById('manual-if-tbody');
+  mT.innerHTML = '';
+  _updateIfSortToggleUI();
+
+  function makeRoleSelect(hName, cur) {
+    const opts = [
+      ['router','ルーター/コア'],['switch','L2/L3スイッチ'],
+      ['ap','AP'],['printer','プリンター'],['other','その他']
+    ].map(([v,t]) => `<option value="${v}"${cur===v?' selected':''}>${t}</option>`).join('');
+    return `<select data-host="${hName}" data-type="role" onchange="saveManualSelect(this)" style="width:100%;font-size:11px;padding:4px;border:1px solid #b0bec5;border-radius:4px;">${opts}</select>`;
+  }
+  function makeTypeSelect(hName, cur, extra='') {
+    const opts = [
+      ['cat6','Cat6 (1G)'],['cat5e','Cat5e (100M)'],['wifi','Wi-Fi']
+    ].map(([v,t]) => `<option value="${v}"${cur===v?' selected':''}>${t}</option>`).join('');
+    return `<select data-host="${hName}" data-type="type" onchange="saveManualSelect(this)" style="width:${extra?'70%':'100%'};font-size:11px;padding:4px;border:1px solid #b0bec5;border-radius:4px;">${opts}</select>${extra}`;
+  }
+
+  const entries = [];
+  allH.forEach(h => {
+    entries.push({
+      name: h.name, isManual: false,
+      role:   ls(`m-if-role-${h.name}`)   || 'other',
+      port:   ls(`m-if-port-${h.name}`)   || '',
+      remote: ls(`m-if-remote-${h.name}`) || '',
+      type:   ls(`m-if-type-${h.name}`)   || 'cat6'
+    });
+  });
+  manualHosts.forEach((hName, idx) => {
+    entries.push({
+      name: hName, isManual: true, idx,
+      role:   ls(`m-if-role-${hName}`)   || 'other',
+      port:   ls(`m-if-port-${hName}`)   || '',
+      remote: ls(`m-if-remote-${hName}`) || '',
+      type:   ls(`m-if-type-${hName}`)   || 'cat6'
+    });
+  });
+
+  const byName = {};
+  entries.forEach(e => { byName[e.name] = e; });
+
+  let orderedNames;
+  const depthMap = {};
+  if (ifSortMode === 'manual') {
+    orderedNames = _getManualOrder(entries);
+  } else {
+    const hOrder = _computeHierarchyOrder(entries);
+    hOrder.forEach(o => { depthMap[o.name] = o.depth; });
+    orderedNames = hOrder.map(o => o.name);
+  }
+
+  const isManualMode = ifSortMode === 'manual';
+
+  orderedNames.forEach(name => {
+    const e = byName[name];
+    if (!e) return;
+    const depth  = depthMap[name] || 0;
+    const prefix = depth > 0
+      ? `<span style="color:#b0bec5;">${'　'.repeat(depth - 1)}└─ </span>`
+      : '';
+    const nameCell = e.isManual
+      ? `<div contenteditable="true" class="editable-cell" style="flex:1;font-weight:700;color:#1a237e;" onblur="changeManualHostName(${e.idx},this)">${e.name}</div>`
+      : `<strong style="flex:1;">${e.name}</strong>`;
+    const delBtn = e.isManual
+      ? `<button class="btn btn-danger" style="padding:3px 6px;font-size:10px;float:right;margin-top:2px;" onclick="deleteManualHost(${e.idx})">削除</button>`
+      : '';
+    const handle = isManualMode ? `<span class="if-drag-handle" title="ドラッグして並べ替え">⣿</span>` : '';
+
+    const tr = document.createElement('tr');
+    tr.className = 'manual-row if-row';
+    tr.dataset.ifName = name;
+    if (isManualMode) {
+      tr.draggable = true;
+      tr.addEventListener('dragstart', onIfRowDragStart);
+      tr.addEventListener('dragover',  onIfRowDragOver);
+      tr.addEventListener('dragleave', onIfRowDragLeave);
+      tr.addEventListener('drop',      onIfRowDrop);
+      tr.addEventListener('dragend',   onIfRowDragEnd);
+    }
+    tr.innerHTML = `
+      <td><div style="display:flex;align-items:center;gap:4px;">${handle}${prefix}${nameCell}</div></td>
+      <td>${makeRoleSelect(e.name, e.role)}</td>
+      <td><div contenteditable="true" class="editable-cell" data-host="${e.name}" data-type="port" oninput="saveManualIF(this)">${e.port}</div></td>
+      <td><div contenteditable="true" class="editable-cell" data-host="${e.name}" data-type="remote" oninput="saveManualIF(this)">${e.remote}</div></td>
+      <td>${makeTypeSelect(e.name, e.type, delBtn)}</td>`;
+    mT.appendChild(tr);
+  });
+
+  if (mT.innerHTML === '') {
+    mT.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:30px;color:#78909c;">データがありません</td></tr>';
+  }
+}
+
+/* ==================================================
+   トポロジーマップ描画（Vis.js）
+   バカハブ自動挿入ロジック付き
+   ================================================== */
+function _renderTopologyMap() {
+  const container = document.getElementById('topology-report-map');
+
+  /* ---- ノード一覧を構築 ---- */
+  const nodes = [];
+  const edges = [];
+  const labelToId = {};
+
+  /* 役割 → 外見マップ */
+  const roleStyle = {
+    router:  { background:'#1a237e', border:'#0d1b3e', size:16, level:0 },
+    switch:  { background:'#f57c00', border:'#e65100', size:14, level:1 },
+    ap:      { background:'#0288d1', border:'#01579b', size:13, level:2 },
+    printer: { background:'#7b1fa2', border:'#4a148c', size:11, level:3 },
+    other:   { background:'#26a69a', border:'#004d40', size:11, level:3 }
+  };
+
+  /* 監視対象ホスト */
+  globalTopologyNodes.forEach(h => {
+    const role  = ls(`m-if-role-${h.name}`) || 'other';
+    const style = roleStyle[role] || roleStyle.other;
+    nodes.push({
+      id:    h.id,
+      label: `${h.name}\n${h.ip}`,
+      shape: 'dot',
+      size:  style.size,
+      level: style.level,
+      color: { background: style.background, border: style.border, highlight: { background: '#fff176', border: style.border } },
+      font:  { size: 10, face: 'Noto Sans JP,Arial', strokeWidth: 3, strokeColor: '#ffffff' },
+      title: `${h.name} (${h.ip})\n役割: ${role}`
+    });
+    labelToId[h.name.trim()] = h.id;
+  });
+
+/* ---- バカハブノードを挿入 ---- */
+detectedHubs.forEach(hub => {
+  /* parentHostId は _detectUnmanagedHubs で host-${hostid} に設定済み。
+     親ノードのレベルを取得してその +1 に配置することで、
+     AP配下などに誤配置されるのを防ぐ。 */
+  const parentId    = hub.parentHostId;
+  const parentNode  = nodes.find(n => n.id === parentId);
+  const parentLevel = parentNode ? (parentNode.level ?? 0) : 0;
+  const hubLevel    = parentLevel + 1;
+  const summaryLevel = parentLevel + 2;
+
+  /* 未管理ハブノード */
+  nodes.push({
+    id:    hub.id,
+    label: `⚠️未管理ハブ\nIF${hub.port}`,
+    shape: 'diamond',
+    size:  20,
+    level: hubLevel,
+    color: {
+      background: hub.confidence === 'high' ? '#b71c1c' : '#e65100',
+      border:     '#ff1744',
+      highlight:  { background: '#ffcdd2', border: '#ff1744' }
+    },
+    font: {
+      size:        12,
+      face:        'Noto Sans JP,Arial',
+      color:       '#b71c1c',
+      strokeWidth: 3,
+      strokeColor: '#ffffff',
+      bold:        true
+    },
+    title: `【未管理ハブ検出】\n接続機器: ${hub.hostName}\nIF${hub.port}\n検出MAC数: ${hub.macCount}台\n\n推奨: 管理スイッチへ交換`
+  });
+
+  /* 親 → ハブ */
+  if (parentId) {
+    edges.push({
+      from:  parentId,
+      to:    hub.id,
+      width: 3,
+      color: { color: '#e53935', opacity: 0.9 },
+      dashes: [8, 4],
+      title: `未管理ハブ接続 (IF${hub.port})`
+    });
+  }
+
+  /* 端末群集約ノード */
+  const summaryId = `${hub.id}-summary`;
+  nodes.push({
+    id:    summaryId,
+    label: `配下端末群\n${hub.macCount}台`,
+    shape: 'database',
+    size:  16,
+    level: summaryLevel,
+    color: {
+      background: '#fff3e0',
+      border:     '#ff8f00',
+      highlight:  { background: '#ffe0b2', border: '#f57c00' }
+    },
+    font: {
+      size:        12,
+      face:        'Noto Sans JP,Arial',
+      color:       '#bf360c',
+      strokeWidth: 2,
+      strokeColor: '#ffffff',
+      bold:        true
+    },
+    title: `ハブ配下端末（推定）\n総数: ${hub.macCount}台\n※詳細にはSNMP管理スイッチが必要`
+  });
+
+  edges.push({
+    from:  hub.id,
+    to:    summaryId,
+    width: 2,
+    color: { color: '#ff8f00', opacity: 0.8 },
+    dashes: [4, 4],
+    title: `${hub.macCount}台接続中`
+  });
+
+  labelToId[hub.id] = hub.id;
+});
+
+  /* ---- LLDPエッジ ---- */
+  globalTopologyEdges.forEach(e => {
+    if (!labelToId[e.toName]) {
+      nodes.push({
+        id: e.toName, label: `${e.toName}\n(LLDP対向)`,
+        shape: 'dot', size: 11, level: 1,
+        color: { background: '#26a69a', border: '#004d40' },
+        font:  { size: 10, face: 'Arial', strokeWidth: 3, strokeColor: '#ffffff' }
+      });
+      labelToId[e.toName] = e.toName;
+    }
+    if (labelToId[e.fromName] && labelToId[e.toName]) {
+      edges.push({
+        from: labelToId[e.fromName], to: labelToId[e.toName],
+        width: 2.5, color: { color: '#2e7d32' },
+        title: e.port ? `LLDP: ${e.port}` : 'LLDP検出'
+      });
+    }
+  });
+
+  /* ---- 手動接続エッジ ---- */
+  cachedActiveHosts.forEach(hName => {
+    const dst = (ls(`m-if-remote-${hName}`) || '').trim();
+    if (!dst || !labelToId[hName] || !labelToId[dst]) return;
+    const t = ls(`m-if-type-${hName}`) || 'cat6';
+    const edge = { from: labelToId[hName], to: labelToId[dst], width: 2.5 };
+    if (t === 'cat6')       edge.color = { color: '#2e7d32' };
+    else if (t === 'cat5e') edge.color = { color: '#e65100' };
+    else if (t === 'wifi')  { edge.color = { color: '#0288d1' }; edge.dashes = [5, 5]; }
+    edges.push(edge);
+  });
+
+  /* ---- ノードが空の場合 ---- */
+  if (nodes.length === 0) {
+    nodes.push({ id: 'empty', label: 'データ同期後に描画されます', shape: 'text', font: { size: 14, color: '#78909c' } });
+  }
+
+  /* ---- Vis.js オプション ---- */
+const options = {
+  layout: {
+    hierarchical: {
+      enabled: true,
+      direction: 'UD',
+      sortMethod: 'directed',
+      nodeSpacing: 200,        // ★ 横間隔を拡大
+      levelSeparation: 140,    // ★ 縦間隔を拡大
+      treeSpacing: 250,        // ★ ツリー間隔
+      blockShifting: true,
+      edgeMinimization: true,
+      parentCentralization: true
+    }
+  },
+  physics: { enabled: false },
+  interaction: {
+    dragNodes: true,
+    zoomView: true,
+    hover: true,
+    tooltipDelay: 200
+  },
+  edges: {
+    smooth: {
+      type: 'cubicBezier',
+      forceDirection: 'vertical',
+      roundness: 0.4
+    },
+    arrows: { 
+      to: { enabled: true, scaleFactor: 0.6 }  // ★ 矢印追加で流れを明確化
+    }
+  },
+  nodes: {
+    shadow: { enabled: true, size: 6, x: 3, y: 3 }
+  }
+};
+
+  /* 既存インスタンスを破棄して再描画 */
+  if (visNetworkInstance) { visNetworkInstance.destroy(); visNetworkInstance = null; }
+  visNetworkInstance = new vis.Network(container, { nodes, edges }, options);
+  visNetworkInstance.once('afterDrawing', () => visNetworkInstance.fit({ animation: { duration: 600 } }));
+}
+
+/* 外部から呼べるラッパー（インターフェース変更時） */
+function renderTopologyMapFromCache() { _renderTopologyMap(); }
+
+/* ==================================================
+   手動ホスト管理
+   ================================================== */
+function addManualHostRow() {
+  const manualHosts = JSON.parse(ls('atlib_manual_hosts') || '[]');
+  const newName = '監視外機器_' + Math.floor(Math.random() * 9000 + 1000);
+  manualHosts.push(newName);
+  lss('atlib_manual_hosts', JSON.stringify(manualHosts));
+  ['role','port','remote','type'].forEach(t => lss(`m-if-${t}-${newName}`, t==='type'?'cat6':''));
+  refreshReportData();
+}
+
+function changeManualHostName(idx, el) {
+  const manualHosts = JSON.parse(ls('atlib_manual_hosts') || '[]');
+  const oldName = manualHosts[idx];
+  const newName = el.innerText.trim();
+  if (!newName || oldName === newName) return;
+  ['role','port','remote','type'].forEach(t => {
+    const v = ls(`m-if-${t}-${oldName}`);
+    if (v !== null) { lss(`m-if-${t}-${newName}`, v); localStorage.removeItem(`m-if-${t}-${oldName}`); }
+  });
+  manualHosts[idx] = newName;
+  lss('atlib_manual_hosts', JSON.stringify(manualHosts));
+  refreshReportData();
+}
+
+function deleteManualHost(idx) {
+  const manualHosts = JSON.parse(ls('atlib_manual_hosts') || '[]');
+  const name = manualHosts[idx];
+  ['role','port','remote','type'].forEach(t => localStorage.removeItem(`m-if-${t}-${name}`));
+  manualHosts.splice(idx, 1);
+  lss('atlib_manual_hosts', JSON.stringify(manualHosts));
+  refreshReportData();
+}
+
+function saveManualIF(el) {
+  lss(`m-if-${el.getAttribute('data-type')}-${el.getAttribute('data-host')}`, el.innerText.trim());
+  _renderTopologyMap();
+}
+
+function saveManualSelect(el) {
+  lss(`m-if-${el.getAttribute('data-type')}-${el.getAttribute('data-host')}`, el.value);
+  if (el.getAttribute('data-type') === 'role') refreshReportData();
+  else _renderTopologyMap();
+}
+
+/* ==================================================
+   PPTX エクスポート
+   ================================================== */
+async function exportToPPTX() {
+  const btn = document.querySelector('.btn-pptx');
+  const orig = btn.textContent;
+  btn.textContent = '出力中...'; btn.style.background = '#78909c';
+
+  document.body.classList.add('export-mode');
+  const editables = document.querySelectorAll('[contenteditable="true"]');
+  editables.forEach(el => { el.setAttribute('data-ce-tmp', 'true'); el.removeAttribute('contenteditable'); });
+
+  const selects = document.querySelectorAll('.slide select');
+  selects.forEach(sel => {
+    const sp = document.createElement('span');
+    sp.className = 'export-tmp-span';
+    sp.style.cssText = 'font-size:11px;color:#37474f;';
+    sp.textContent = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : '';
+    sel.style.display = 'none';
+    sel.parentNode.insertBefore(sp, sel);
+  });
+
+  await new Promise(r => setTimeout(r, 400));
+
+  try {
+    const pptx   = new PptxGenJS();
+    pptx.layout  = 'LAYOUT_16x9';
+    const slides = document.querySelectorAll('.slide');
+    for (let i = 0; i < slides.length; i++) {
+      const canvas = await html2canvas(slides[i], { scale: 2, useCORS: true, logging: false, allowTaint: true });
+      const img    = canvas.toDataURL('image/png');
+      const pSlide = pptx.addSlide();
+      pSlide.addImage({ data: img, x: 0, y: 0, w: 10, h: 5.625 });
+    }
+    const custName = document.getElementById('lbl-customer').textContent || 'Unknown';
+    const period   = document.getElementById('lbl-period').textContent.replace(/[^0-9年月]/g,'').replace('年','年').replace('月','月');
+    await pptx.writeFile({ fileName: `atLIB_Monthly_Report_${custName}_${period}.pptx` });
+  } catch (e) {
+    console.error('exportToPPTX:', e);
+    alert('PPTX生成に失敗しました: ' + e.message);
+  } finally {
+    document.body.classList.remove('export-mode');
+    document.querySelectorAll('.export-tmp-span').forEach(s => s.remove());
+    selects.forEach(sel => sel.style.display = '');
+    editables.forEach(el => { el.setAttribute('contenteditable', 'true'); el.removeAttribute('data-ce-tmp'); });
+    btn.textContent = orig; btn.style.background = '#0288d1';
+  }
+}
+
+/* ==================================================
+   WAN トラフィック
+   ================================================== */
+
+/* WANインターフェースセレクター（IN / OUT 独立）をルーターホストのアイテムで埋める */
+function _populateWanSelector() {
+  const selIn  = document.getElementById('wan-if-in');
+  const selOut = document.getElementById('wan-if-out');
+  if (!selIn || !selOut) return;
+
+  const prevIn  = ls('atlib_wan_if_in')  || '';
+  const prevOut = ls('atlib_wan_if_out') || '';
+  selIn.innerHTML  = '<option value="">── IN ──</option>';
+  selOut.innerHTML = '<option value="">── OUT ──</option>';
+
+  /* ルーター役割のホストを優先、未設定なら全ホスト */
+  const routerHosts = globalAllH.filter(h => (ls(`m-if-role-${h.name}`) || 'other') === 'router');
+  const targetHosts = routerHosts.length > 0 ? routerHosts : globalAllH;
+  const targetIds   = new Set(targetHosts.map(h => h.hostid));
+  const hostItems   = globalItems.filter(i => targetIds.has(i.hostid));
+
+  /* キー先頭で方向を判定（名前は使わない）
+     対応: net.if.in[...] / net.if.out[...] / ifInOctets[...] / ifOutOctets[...] */
+  const inItems  = hostItems.filter(i => /^net\.if\.in\[|^ifInOctets\[/i.test(i.key_));
+  const outItems = hostItems.filter(i => /^net\.if\.out\[|^ifOutOctets\[/i.test(i.key_));
+
+  /* 表示名: アイテム名の "Interface {n}:" → ブラケット末尾数値 → ブラケットそのまま */
+  const getDispName = item => {
+    const nm = item.name.match(/^interface\s+([^:]+)\s*:/i);
+    if (nm) return nm[1].trim();
+    const bm = item.key_.match(/\[([^\],]+)/);
+    const bracket = bm ? bm[1].trim() : item.name;
+    const idx = bracket.match(/(\d+)$/);
+    if (idx) return `IF ${idx[1]}`;
+    return bracket.replace(/^if(?:In|Out)/i, 'if');
+  };
+
+  /* 各セレクターに独立してオプションを追加 */
+  const appendItems = (sel, items) => {
+    items.forEach(item => {
+      const host = globalAllH.find(h => h.hostid === item.hostid);
+      const hostName = host ? host.name : item.hostid;
+      const dispName = getDispName(item);
+      const opt = document.createElement('option');
+      opt.value           = item.itemid;
+      opt.dataset.ifLabel = `${hostName} / ${dispName}`;
+      opt.textContent     = `${hostName} / ${dispName}`;
+      sel.appendChild(opt);
+    });
+  };
+
+  appendItems(selIn,  inItems);
+  appendItems(selOut, outItems);
+
+  /* 以前の選択を復元 */
+  if (prevIn)  selIn.value  = prevIn;
+  if (prevOut) selOut.value = prevOut;
+}
+
+/* WAN IF セレクター変更ハンドラ（IN / OUT 独立） */
+async function onWanIfChange() {
+  const selIn  = document.getElementById('wan-if-in');
+  const selOut = document.getElementById('wan-if-out');
+  if (selIn)  lss('atlib_wan_if_in',  selIn.value);
+  if (selOut) lss('atlib_wan_if_out', selOut.value);
+  await _fetchAndRenderTraffic();
+}
+
+/* Zabbix trend.get でトラフィックデータを取得して描画 */
+async function _fetchAndRenderTraffic() {
+  const selIn  = document.getElementById('wan-if-in');
+  const selOut = document.getElementById('wan-if-out');
+  const noData = document.getElementById('traffic-no-data');
+  const canvas = document.getElementById('traffic-chart');
+  if (!selIn || !selOut || !noData || !canvas) return;
+
+  const inItemId  = selIn.value;
+  const outItemId = selOut.value;
+
+  if (!inItemId && !outItemId) {
+    noData.textContent   = '管理パネルの WAN IF (IN/OUT) を選択してデータ同期してください';
+    noData.style.display = 'block';
+    canvas.style.display = 'none';
+    return;
+  }
+
+  /* ラベル: IN セレクターの選択名を基準にする */
+  const inOpt  = selIn.options[selIn.selectedIndex];
+  const outOpt = selOut.options[selOut.selectedIndex];
+  const ifLabel = (inOpt && inOpt.value && inOpt.dataset.ifLabel)
+    ? inOpt.dataset.ifLabel
+    : (outOpt && outOpt.dataset.ifLabel) || '';
+
+  const year  = parseInt(document.getElementById('target-year').value,  10);
+  const month = parseInt(document.getElementById('target-month').value, 10);
+  const tFrom = Math.floor(new Date(year, month - 1, 1).getTime() / 1000);
+  const tTill = Math.floor(new Date(year, month,     1).getTime() / 1000) - 1;
+
+  const periodEl = document.getElementById('traffic-period-label');
+  const labelEl  = document.getElementById('traffic-if-label');
+  if (periodEl) periodEl.textContent = `${year}年${String(month).padStart(2,'0')}月度`;
+  if (labelEl)  labelEl.textContent  = ifLabel;
+
+  try {
+    const itemids = [inItemId, outItemId].filter(Boolean);
+    const trends  = await zbxCall('trend.get', {
+      itemids,
+      time_from: tFrom,
+      time_till: tTill,
+      output:    'extend'
+    }, 40);
+
+    const inTrends  = inItemId  ? trends.filter(t => t.itemid === inItemId)  : [];
+    const outTrends = outItemId ? trends.filter(t => t.itemid === outItemId) : [];
+    _renderTrafficChart(inTrends, outTrends);
+  } catch (e) {
+    console.error('_fetchAndRenderTraffic:', e);
+    noData.innerHTML = `トラフィックデータの取得に失敗しました<br><small>${e.message}</small>`;
+    noData.style.display = 'block';
+    canvas.style.display = 'none';
+  }
+}
+
+/* Chart.js でトラフィックグラフを描画 */
+function _renderTrafficChart(inTrends, outTrends) {
+  const noData = document.getElementById('traffic-no-data');
+  const canvas = document.getElementById('traffic-chart');
+
+  if (!inTrends.length && !outTrends.length) {
+    noData.textContent   = 'トレンドデータが見つかりません（Zabbixのトレンド保存が有効か確認してください）';
+    noData.style.display = 'block';
+    canvas.style.display = 'none';
+    return;
+  }
+  noData.style.display = 'none';
+  canvas.style.display = 'block';
+
+  /* bps → Mbps（Zabbix はトレンドを bps で保存） */
+  const toMbps = v => parseFloat(v) / 1_000_000;
+
+  /* 時刻軸を IN/OUT の union で構築 */
+  const allClocks = [...new Set([
+    ...inTrends.map(t  => t.clock),
+    ...outTrends.map(t => t.clock)
+  ])].sort((a, b) => a - b);
+
+  const labels = allClocks.map(c => {
+    const d = new Date(parseInt(c, 10) * 1000);
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const hh = String(d.getHours()).padStart(2, '0');
+    return `${mm}/${dd} ${hh}h`;
+  });
+
+  /* avg / max マップ */
+  const inAvgMap = {}, inMaxMap = {};
+  inTrends.forEach(t  => { inAvgMap[t.clock] = toMbps(t.value_avg); inMaxMap[t.clock] = toMbps(t.value_max); });
+  const outAvgMap = {}, outMaxMap = {};
+  outTrends.forEach(t => { outAvgMap[t.clock] = toMbps(t.value_avg); outMaxMap[t.clock] = toMbps(t.value_max); });
+
+  const inAvgData  = allClocks.map(c => inAvgMap[c]  ?? null);
+  const outAvgData = allClocks.map(c => outAvgMap[c] ?? null);
+
+  /* KPI 計算 */
+  const nums      = arr  => arr.filter(v => v !== null);
+  const mean      = arr  => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
+  const maxVal    = arr  => arr.length ? Math.max(...arr) : null;
+  const fmt       = v   => (v !== null && v !== undefined && isFinite(v)) ? v.toFixed(1) : '──';
+
+  const inMaxArr  = Object.values(inMaxMap);
+  const outMaxArr = Object.values(outMaxMap);
+
+  const setEl = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  setEl('traffic-in-peak',  fmt(maxVal(inMaxArr)));
+  setEl('traffic-in-avg',   fmt(mean(nums(inAvgData))));
+  setEl('traffic-out-peak', fmt(maxVal(outMaxArr)));
+  setEl('traffic-out-avg',  fmt(mean(nums(outAvgData))));
+
+  /* 既存チャートを破棄 */
+  if (trafficChartInstance) { trafficChartInstance.destroy(); trafficChartInstance = null; }
+
+  const ctx = canvas.getContext('2d');
+  trafficChartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label:           'IN（受信）',
+          data:            inAvgData,
+          borderColor:     '#1565c0',
+          backgroundColor: 'rgba(21,101,192,0.10)',
+          fill:            true,
+          tension:         0.3,
+          borderWidth:     1.5,
+          pointRadius:     0,
+          spanGaps:        true
+        },
+        {
+          label:           'OUT（送信）',
+          data:            outAvgData,
+          borderColor:     '#e65100',
+          backgroundColor: 'rgba(230,81,0,0.10)',
+          fill:            true,
+          tension:         0.3,
+          borderWidth:     1.5,
+          pointRadius:     0,
+          spanGaps:        true
+        }
+      ]
+    },
+    options: {
+      responsive:          true,
+      maintainAspectRatio: false,
+      animation:           { duration: 0 },
+      plugins: {
+        legend: {
+          position: 'top',
+          labels:   { font: { size: 11 }, usePointStyle: true, padding: 14 }
+        },
+        tooltip: {
+          mode:      'index',
+          intersect: false,
+          callbacks: {
+            label: ctx => {
+              const v = ctx.parsed.y;
+              return `${ctx.dataset.label}: ${v !== null ? v.toFixed(2) + ' Mbps' : '──'}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { maxTicksLimit: 12, font: { size: 9 }, maxRotation: 0 },
+          grid:  { color: 'rgba(0,0,0,0.04)' }
+        },
+        y: {
+          title:       { display: true, text: 'Mbps', font: { size: 10 }, color: '#78909c' },
+          ticks:       { font: { size: 10 } },
+          grid:        { color: 'rgba(0,0,0,0.04)' },
+          beginAtZero: true
+        }
+      }
+    }
+  });
+}
+
+/* ==================================================
+   localStorage ショートハンド
+   ================================================== */
+function ls(key)       { return localStorage.getItem(key); }
+function lss(key, val) { localStorage.setItem(key, val); }
+
+/* ==================================================
+   初期化
+   ================================================== */
+window.addEventListener('DOMContentLoaded', () => {
+  loadHostGroups();
+  loadEditableContent();
+  _updateIfSortToggleUI();
+  /* 保存済みのホストがあれば空のトポロジーマップだけ先に描画 */
+  globalTopologyNodes = [];
+  globalTopologyEdges = [];
+  cachedActiveHosts   = [];
+  detectedHubs        = [];
+  _renderTopologyMap();
+});
+</script>
+</body>
+</html>
