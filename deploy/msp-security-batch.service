@@ -1,0 +1,12 @@
+[Unit]
+Description=atLIB MSP CVE/EoL security batch + LLDP new-neighbor detection
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/msp-batch/batch
+ExecStart=/opt/msp-batch/run.sh
+StandardOutput=journal
+StandardError=journal
