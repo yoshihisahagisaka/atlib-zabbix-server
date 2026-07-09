@@ -1077,28 +1077,35 @@ function _renderInventory(allH, items) {
       }
     }
 
-    /* 対応要否バッジ — バッチの sec_risk タグを優先 */
-    let actionBadge = '<span class="badge badge-success">対応不要</span>';
+    /* 対応要否バッジ — バッチの sec_risk タグ（CVE/EoL）と稼働時間超過は独立に評価し、
+       両方該当する場合は両方のバッジを表示する（旧実装はsec_riskがあると稼働時間超過を
+       一切評価しないバグがあり、日次バッチ実行後は稼働時間超過が実質検出されなかった） */
+    const badges = [];
+
     if (secRisk) {
       const riskMap = {
         critical: '<span class="badge badge-critical">要対応</span>',
         high:     '<span class="badge badge-warning">要確認</span>',
         medium:   '<span class="badge badge-info">要監視</span>',
         warning:  '<span class="badge badge-warning">要計画</span>',
-        ok:       '<span class="badge badge-success">対応不要</span>',
       };
-      actionBadge = riskMap[secRisk] || actionBadge;
+      if (riskMap[secRisk]) badges.push(riskMap[secRisk]);
     } else {
-      if (uDay >= 365) actionBadge = '<span class="badge badge-warning">要再起動</span>';
-      if (hasVuln)     actionBadge = '<span class="badge badge-warning">要パッチ</span>';
+      if (hasVuln) badges.push('<span class="badge badge-warning">要パッチ</span>');
       if (eolStr !== '情報なし') {
         const eT = new Date(eolStr.replace(/-/g, '/')).getTime();
         if (!isNaN(eT)) {
-          if (eT < Date.now()) actionBadge = '<span class="badge badge-critical">要交換</span>';
-          else if (eT <= Date.now() + 31536000000) actionBadge = '<span class="badge badge-warning">要計画</span>';
+          if (eT < Date.now()) badges.push('<span class="badge badge-critical">要交換</span>');
+          else if (eT <= Date.now() + 31536000000) badges.push('<span class="badge badge-warning">要計画</span>');
         }
       }
     }
+
+    if (uDay >= 365) badges.push('<span class="badge badge-warning">要再起動</span>');
+
+    const actionBadge = badges.length > 0
+      ? badges.join('<br>')
+      : '<span class="badge badge-success">対応不要</span>';
 
     const ip = h.interfaces && h.interfaces[0] ? h.interfaces[0].ip : '───';
     const tr = document.createElement('tr');

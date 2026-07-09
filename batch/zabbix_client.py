@@ -1,3 +1,4 @@
+import re
 from datetime import date
 import requests
 
@@ -7,11 +8,16 @@ _TAG_PREFIX = "sec_"
 
 
 class ZabbixClient:
-    def __init__(self, url: str, user: str, password: str):
+    def __init__(self, url: str, user: str | None = None, password: str | None = None, token: str | None = None):
+        """user+password（従来の日次バッチ用）または token（APIトークン、失効・ローテーションが
+        容易なため管理系スクリプトではこちらを推奨）のいずれかで認証する。
+        """
         self.url = url
         self.auth = None
+        self._token = token
         self._id = 0
-        self._login(user, password)
+        if not token:
+            self._login(user, password)
 
     def _req(self, method: str, params: dict):
         self._id += 1
@@ -21,14 +27,24 @@ class ZabbixClient:
             "params": params,
             "id": self._id,
         }
-        if self.auth:
+        headers = {"Content-Type": "application/json-rpc"}
+        # apiinfo.version は仕様上 auth パラメータ付きでは呼び出せない
+        if method == "apiinfo.version":
+            pass
+        elif self._token:
+            headers["Authorization"] = f"Bearer {self._token}"
+        elif self.auth:
             payload["auth"] = self.auth
-        r = requests.post(self.url, json=payload, timeout=30)
+        r = requests.post(self.url, json=payload, headers=headers, timeout=30)
         r.raise_for_status()
         body = r.json()
         if "error" in body:
             raise RuntimeError(f"Zabbix API error [{method}]: {body['error']}")
         return body["result"]
+
+    def call(self, method: str, params: dict):
+        """任意のZabbix API呼び出し用の公開ラッパー（管理系スクリプトから利用）。"""
+        return self._req(method, params)
 
     def _login(self, user: str, password: str):
         self.auth = self._req("user.login", {"username": user, "password": password})
@@ -97,3 +113,45 @@ class ZabbixClient:
             "tags": preserved + new_tags,
             "inventory": inventory,
         })
+
+    def get_lldp_neighbors(self, hostids: list[str]) -> dict[str, list[dict]]:
+        """LLDPネイバー情報（lldp.rem.sysname系アイテム）をホストごとに取得する。
+
+        新規機器検知（未知のLLDPネイバーの新規出現検知）専用。atlib_monthly_report.html の
+        バカハブ検出・トポロジー図で既に使われているのと同じ lldp.rem.sysname 系アイテムを流用する。
+        """
+        if not hostids:
+            return {}
+        items = self._req("item.get", {
+            "hostids": hostids,
+            "output": ["itemid", "hostid", "key_", "lastvalue"],
+            "search": {"key_": "lldp.rem"},
+        })
+        neighbors: dict[str, list[dict]] = {}
+        for item in items:
+            if "sysname" not in item["key_"] or not item.get("lastvalue"):
+                continue
+            m = re.search(r"\[(\d+)", item["key_"])
+            port = m.group(1) if m else item["key_"]
+            neighbors.setdefault(item["hostid"], []).append({
+                "port": port,
+                "sysname": item["lastvalue"].strip(),
+            })
+        return neighbors
+
+    def push_trapper_value(self, hostid: str, key: str, value: str) -> bool:
+        """Trapperアイテムへ値を書き込む（history.push）。
+
+        アイテムが対象ホストにまだ作成されていない場合は何もせず False を返す
+        （Trapperアイテム・Triggerの新設はZabbix管理画面側で行う前提のため、
+        未作成時にバッチを異常終了させない）。
+        """
+        items = self._req("item.get", {
+            "hostids": hostid,
+            "output": ["itemid"],
+            "filter": {"key_": key},
+        })
+        if not items:
+            return False
+        self._req("history.push", {"itemid": items[0]["itemid"], "value": value})
+        return True

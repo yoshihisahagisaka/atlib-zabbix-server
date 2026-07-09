@@ -1,10 +1,11 @@
-"""CVE / EoL 突合バッチ
+"""CVE / EoL 突合 ＋ LLDP新規ネイバー検知バッチ
 
 使い方:
   python main.py [--config config.yaml] [--dry-run]
 
 出力:
   reports/health_check_YYYYMMDD_HHMMSS.json
+  lldp_snapshot.json （LLDPネイバーの前回スナップショット、次回実行時のdiff用）
 """
 import argparse
 import json
@@ -33,7 +34,7 @@ def main():
     # ---- 初期化 ----
     nvd_api_key = config.get("nvd", {}).get("api_key", "")
 
-    print("[1/5] Zabbix からホスト情報を取得中...")
+    print("[1/6] Zabbix からホスト情報を取得中...")
     if args.dry_run:
         hosts = _dummy_hosts()
         print("  → ドライランモード: ダミーデータを使用")
@@ -46,18 +47,18 @@ def main():
         hosts = zabbix.get_hosts_inventory()
     print(f"  → {len(hosts)} 件のホスト")
 
-    print("[2/5] CISA KEV + NVD クライアントを初期化中...")
+    print("[2/6] CISA KEV + NVD クライアントを初期化中...")
     nvd = NvdClient(nvd_api_key)
     print(f"  → CISA KEV: {len(nvd._kev)} 件の悪用確認済み CVE を読み込み済み")
 
-    print("[3/5] CPE マッパーを初期化中...")
+    print("[3/6] CPE マッパーを初期化中...")
     cpe_mapper = CpeMapper(HERE / "cpe_overrides.json", nvd_api_key)
 
-    print("[4/5] EoL クライアントを初期化中...")
+    print("[4/6] EoL クライアントを初期化中...")
     eol_client = EolClient(HERE / "eol_overrides.json")
 
     # ---- デバイスごとに突合 ----
-    print("[5/5] 各デバイスを CVE / EoL と突合中...")
+    print("[5/6] 各デバイスを CVE / EoL と突合中...")
     results = []
     for host in hosts:
         inv = host.get("inventory") or {}
@@ -124,6 +125,22 @@ def main():
     elif args.dry_run and writeback_enabled:
         print("\n[ドライラン] Zabbix 書き戻しはスキップ")
 
+    # ---- LLDP新規ネイバー検知 ----
+    print("\n[6/6] LLDPネイバーの新規出現を確認中...")
+    if args.dry_run:
+        print("  → ドライランモード: スキップ（Zabbix接続なしのため）")
+    else:
+        snapshot_path = HERE / config.get("lldp", {}).get("snapshot_path", "lldp_snapshot.json")
+        hostid_map = {h["hostid"]: h["host"] for h in hosts}
+        new_neighbors = _detect_new_lldp_neighbors(hosts, zabbix, snapshot_path)
+        if new_neighbors:
+            print(f"  → {len(new_neighbors)} 台のホストで新規LLDPネイバーを検出:")
+            for hostid, fresh in new_neighbors.items():
+                names = ", ".join(f"IF{n['port']}:{n['sysname']}" for n in fresh)
+                print(f"    - {hostid_map.get(hostid, hostid)}: {names}")
+        else:
+            print("  → 新規ネイバーなし")
+
     _print_summary(results)
 
 
@@ -148,6 +165,44 @@ def _calc_risk(cves: list[dict], eol_info: dict | None) -> str:
     if eol_info and eol_info.get("days_until_eol") is not None and eol_info["days_until_eol"] <= 90:
         return "warning"
     return "ok"
+
+
+# ------------------------------------------------------------------
+# LLDP新規ネイバー検知
+# ------------------------------------------------------------------
+
+def _detect_new_lldp_neighbors(hosts: list[dict], zabbix: ZabbixClient, snapshot_path: Path) -> dict[str, list[dict]]:
+    """前回実行時のLLDPネイバー一覧との差分から、新規に出現したネイバーを検知する。
+
+    「未知の機器検知」要件のうち、Zabbix Discoveryではカバーできない範囲
+    （監視対象スイッチの配下に新規接続されたがまだSNMP監視対象として
+    登録されていない機器）を補完する。検知したホストには sec.lldp.new_neighbor
+    Trapperアイテムへ 1 を、それ以外には 0 を書き込み、Zabbix Trigger側の
+    アラート（Zabbix管理画面側で別途設定）が発火・自動解消するようにする。
+    """
+    hostids = [h["hostid"] for h in hosts]
+    current = zabbix.get_lldp_neighbors(hostids)
+
+    previous: dict[str, list[dict]] = {}
+    if snapshot_path.exists():
+        previous = json.loads(snapshot_path.read_text(encoding="utf-8"))
+
+    new_by_host: dict[str, list[dict]] = {}
+    for hostid, neighbors in current.items():
+        known = {(n["port"], n["sysname"]) for n in previous.get(hostid, [])}
+        fresh = [n for n in neighbors if (n["port"], n["sysname"]) not in known]
+        if fresh:
+            new_by_host[hostid] = fresh
+
+    snapshot_path.write_text(json.dumps(current, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    # Trapperアイテムが未作成のホストは push_trapper_value が False を返すだけで、
+    # Zabbix側のアイテム・Trigger新設（別途対応）が終わるまでは静かにスキップされる
+    for hostid in current:
+        value = "1" if hostid in new_by_host else "0"
+        zabbix.push_trapper_value(hostid, "sec.lldp.new_neighbor", value)
+
+    return new_by_host
 
 
 # ------------------------------------------------------------------
@@ -215,7 +270,7 @@ def _dummy_hosts() -> list[dict]:
 # ------------------------------------------------------------------
 
 def _parse_args():
-    p = argparse.ArgumentParser(description="CVE/EoL 突合バッチ")
+    p = argparse.ArgumentParser(description="CVE/EoL 突合 ＋ LLDP新規ネイバー検知バッチ")
     p.add_argument("--config", default=str(HERE / "config.yaml"), help="設定ファイルパス")
     p.add_argument("--dry-run", action="store_true", help="Zabbixに接続せずダミーデータで動作確認")
     return p.parse_args()
