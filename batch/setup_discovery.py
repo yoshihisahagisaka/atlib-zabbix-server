@@ -1,8 +1,16 @@
 """MSP標準ディスカバリルール・アクション セットアップスクリプト
 
 顧客ごとにProxy・IPレンジでスコープされたディスカバリルール（プリンター・サーバー・
-ネットワーク機器を検出する標準チェックリスト）と、それに対応する2つのディスカバリ
-アクション（SNMP応答機器登録／ICMPフォールバック登録）を、同じテンプレートから複製生成する。
+ネットワーク機器を検出する標準チェックリスト）と、それに対応する3つのディスカバリ
+アクション（SNMP応答機器登録／ICMPフォールバック登録／新規機器検知通知）を、同じ
+テンプレートから複製生成する。
+
+新規機器検知通知アクションは検出ステータス「Discovered」（今回のスキャンで初めて
+検出された場合のみ1回発火、想定値=2）を使う。他の2アクションが使う「Up」（毎サイク
+ル再評価、想定値=0）とは異なる値のため、取り違えると既知の機器に対して毎サイクル
+誤通知が飛ぶ事故になりうる。安全策として、このアクションは作成時 status=1（無効）
+にしておき、Zabbix管理画面で条件（特にDiscoveredの表示）を目視確認したうえで、
+人間が手動で有効化することを前提とする。
 
 背景: 本番Zabbixに「テストルール」「テストアクション」〜「テストアクション3」等、
 場当たり的に作られた複数のディスカバリルール・アクションが混在し、どれが正しいか
@@ -19,7 +27,7 @@ SNMPチェックに必要なコミュニティ文字列は、既存の「テス�
   # 2. 内容を確認したうえで実際に作成する
   python setup_discovery.py --apply \
     --customer-code atlib --company-name "atLIB株式会社様" \
-    --ip-range 192.168.0.1-254 [--proxy-id <zabbix_proxy_id>]
+    --ip-range 192.168.0.1-254 [--proxy-id <zabbix_proxy_id>] [--notify-user atladmin]
 
 接続情報（環境変数、どちらか一方）:
   ZABBIX_URL + ZABBIX_TOKEN
@@ -73,6 +81,7 @@ def main():
     rule_name = f"MSP_インフラ自動検知_{args.customer_code}"
     snmp_action_name = f"MSP_SNMP機器登録_{args.customer_code}"
     icmp_action_name = f"MSP_ICMPフォールバック登録_{args.customer_code}"
+    new_device_action_name = f"MSP_新規機器検知通知_{args.customer_code}"
 
     existing_rule = _find_rule_by_name(zabbix, rule_name)
     print(f"\nディスカバリルール「{rule_name}」: {'既に存在します（druleid=' + existing_rule['druleid'] + '）' if existing_rule else '未作成'}")
@@ -80,6 +89,14 @@ def main():
     print(f"アクション「{snmp_action_name}」: {'既に存在します' if existing_snmp_action else '未作成'}")
     existing_icmp_action = _find_action_by_name(zabbix, icmp_action_name)
     print(f"アクション「{icmp_action_name}」: {'既に存在します' if existing_icmp_action else '未作成'}")
+    existing_new_device_action = _find_action_by_name(zabbix, new_device_action_name)
+    print(f"アクション「{new_device_action_name}」: {'既に存在します' if existing_new_device_action else '未作成'}")
+
+    notify_user = _find_user(zabbix, args.notify_user)
+    if notify_user:
+        print(f"通知先ユーザー「{args.notify_user}」: userid={notify_user['userid']}")
+    else:
+        print(f"通知先ユーザー「{args.notify_user}」: [警告] 見つかりません。新規機器検知通知アクションは作成できません。")
 
     print("\n作成予定のTCP/ICMPチェック:")
     print("  - ICMP ping（基本疎通）")
@@ -115,11 +132,23 @@ def main():
         _create_icmp_fallback_action(zabbix, icmp_action_name, druleid, group["groupid"])
         print(f"  [作成] アクション「{icmp_action_name}」を作成しました")
 
+    if existing_new_device_action:
+        print(f"  [スキップ] アクション「{new_device_action_name}」は既に存在します")
+    elif not notify_user:
+        print(f"  [スキップ] アクション「{new_device_action_name}」は通知先ユーザーが見つからないため作成しませんでした")
+    else:
+        _create_new_device_action(zabbix, new_device_action_name, druleid, notify_user["userid"])
+        print(f"  [作成] アクション「{new_device_action_name}」を作成しました（無効状態）")
+
     print("\n完了。Zabbix管理画面でルール・アクションの内容を確認してください。")
     print("既知の機器に対して実際に正しく検出・分類されることを確認したのち、")
     print("旧テスト用ルール・アクションの削除を検討してください（本スクリプトでは削除しません）。")
     print("\n[既知の制約] ICMPにのみ応答しSNMP/TCP各ポートいずれにも応答しない機器は、")
     print("今回のフォールバックアクションの対象外です（将来の拡張課題）。")
+    print("\n[重要] 新規機器検知通知アクションは安全のため無効状態で作成されています。")
+    print("Zabbix管理画面で条件（検出ステータス=Discovered）を確認したうえで、")
+    print("手動で有効化してください。誤って毎スキャンサイクル通知が飛ばないか、")
+    print("有効化後は数サイクル分様子を見ることを推奨します。")
 
 
 # ------------------------------------------------------------------
@@ -171,6 +200,11 @@ def _find_rule_by_name(zabbix: ZabbixClient, name: str) -> dict | None:
 def _find_action_by_name(zabbix: ZabbixClient, name: str) -> dict | None:
     actions = zabbix.call("action.get", {"output": ["actionid"], "filter": {"name": name}})
     return actions[0] if actions else None
+
+
+def _find_user(zabbix: ZabbixClient, username: str) -> dict | None:
+    users = zabbix.call("user.get", {"output": ["userid", "username"], "filter": {"username": username}})
+    return users[0] if users else None
 
 
 # ------------------------------------------------------------------
@@ -256,6 +290,29 @@ def _create_icmp_fallback_action(zabbix: ZabbixClient, name: str, druleid: str, 
     })
 
 
+def _create_new_device_action(zabbix: ZabbixClient, name: str, druleid: str, userid: str) -> None:
+    # 検出ステータス=Discovered（今回のスキャンで初めて検出、想定値=2）でのみ発火する。
+    # SNMP機器登録／ICMPフォールバック登録が使う Up(0)/Down(1) とは異なる値のため、
+    # 取り違えると既知の機器に対して毎サイクル誤通知が飛ぶ。安全のため status=1（無効）
+    # で作成し、Zabbix管理画面での目視確認・手動有効化を必須とする。
+    zabbix.call("action.create", {
+        "name": name,
+        "eventsource": 1,
+        "status": 1,  # 無効（手動確認後に人間が有効化する）
+        "filter": {
+            "evaltype": 0,
+            "conditions": [
+                {"conditiontype": 18, "operator": 0, "value": druleid},   # ディスカバリルール
+                {"conditiontype": 8,  "operator": 0, "value": "11"},     # サービスタイプ=SNMPv2
+                {"conditiontype": 10, "operator": 0, "value": "2"},      # 検出ステータス=Discovered(想定値)
+            ],
+        },
+        "operations": [
+            {"operationtype": 0, "opmessage_usr": [{"userid": userid}], "opmessage": {"default_msg": 1, "mediatypeid": 0}},
+        ],
+    })
+
+
 def _parse_args():
     p = argparse.ArgumentParser(description="MSP標準ディスカバリルール・アクションセットアップ")
     p.add_argument("--apply", action="store_true", help="実際に作成する（指定しなければdry-run）")
@@ -264,6 +321,7 @@ def _parse_args():
     p.add_argument("--company-name", required=True, help="ホストグループ解決用の会社名（MSP/{company-name}）")
     p.add_argument("--ip-range", default="", help="スキャン対象のIPレンジ（例: 192.168.0.1-254）")
     p.add_argument("--proxy-id", default=None, help="スコープするZabbix Proxy ID（省略時はZabbix Server直下）")
+    p.add_argument("--notify-user", default="atladmin", help="新規機器検知通知の送信先Zabbixユーザー名（デフォルト atladmin）")
     return p.parse_args()
 
 
