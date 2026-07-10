@@ -580,7 +580,7 @@ body.export-mode #hub-alert-banner{display:none!important;}
   </div>
   <div class="slide-body">
     <p style="font-size:11px;color:#78909c;margin-bottom:8px;">
-      ディスカバリルールがSNMP応答機器を新規に検出した際の通知履歴です（本レポートのホストグループに対応するディスカバリルール・アクションが未設定の場合は表示されません）。
+      ディスカバリルールが新規に検出した機器の履歴です（SNMP・ICMP・TCPポート応答いずれも対象。本レポートのホストグループに対応するディスカバリルールが未設定の場合は表示されません）。SNMP非対応機器はZabbixホストとしては登録されませんが、ここには表示されます。
     </p>
     <div class="table-wrap">
       <table class="report-table">
@@ -1052,14 +1052,31 @@ function _renderIncidents(events, tFrom, tSec) {
    opgroup（グループ割当先）から特定し、そのアクションの通知送信履歴(alert.get)を表示する。
    対応するディスカバリルール・アクションが未設定の顧客では「データなし」表示になる。
    -------------------------------------------------- */
+/* ポート番号 → 簡易ラベル（zabbixserver/batch/setup_discovery.py の STANDARD_TCP_CHECKS と対応） */
+const DISCOVERY_PORT_LABELS = {
+  '0':    'ICMP',
+  '161':  'SNMP',
+  '9100': 'TCP 9100 (プリンター/RAW)',
+  '515':  'TCP 515 (プリンター/LPR)',
+  '631':  'TCP 631 (プリンター/IPP)',
+  '22':   'TCP 22 (SSH)',
+  '445':  'TCP 445 (SMB)',
+  '3389': 'TCP 3389 (RDP)',
+  '3493': 'TCP 3493 (UPS)',
+  '10050':'TCP 10050 (Zabbixエージェント)',
+  '443':  'TCP 443 (HTTPS)',
+};
+
 async function _loadNewDeviceHistory(groupId) {
   const tbody = document.getElementById('slide-newdevice-tbody');
   tbody.innerHTML = '<tr><td colspan="2" style="text-align:center;color:#78909c;padding:30px;">読み込み中...</td></tr>';
 
   try {
+    /* 顧客のディスカバリルールIDを、SNMP機器登録アクションの条件(ディスカバリルール)から特定する */
     const actions = await zbxCall('action.get', {
       output: ['actionid', 'name'],
-      search: { name: 'MSP_新規機器検知通知_' },
+      search: { name: 'MSP_SNMP機器登録_' },
+      selectFilter: 'extend',
       selectOperations: 'extend',
       filter: { eventsource: 1 }
     }, 40);
@@ -1073,21 +1090,53 @@ async function _loadNewDeviceHistory(groupId) {
       return;
     }
 
-    const alerts = await zbxCall('alert.get', {
-      actionids: [match.actionid],
-      output: ['alertid', 'clock', 'subject'],
-      sortfield: 'clock', sortorder: 'DESC', limit: 20
-    }, 41);
+    const druleCond = (match.filter && match.filter.conditions || []).find(c => c.conditiontype === '18');
+    const druleid = druleCond && druleCond.value;
+    if (!druleid) {
+      tbody.innerHTML = '<tr><td colspan="2" style="text-align:center;color:#78909c;padding:30px;">ディスカバリルールを特定できませんでした</td></tr>';
+      return;
+    }
 
-    tbody.innerHTML = '';
-    if (!alerts || alerts.length === 0) {
+    /* そのルール配下の全dserviceid・ip・portの対応表を作る（SNMP/ICMP/TCP問わず全プロトコル） */
+    const dhosts = await zbxCall('dhost.get', {
+      druleids: [druleid],
+      output: ['dhostid'],
+      selectDServices: ['dserviceid', 'ip', 'port']
+    }, 42);
+
+    const dserviceMap = {};
+    const dserviceids = [];
+    dhosts.forEach(dh => (dh.dservices || []).forEach(ds => {
+      dserviceMap[ds.dserviceid] = { ip: ds.ip, port: ds.port };
+      dserviceids.push(ds.dserviceid);
+    }));
+
+    if (dserviceids.length === 0) {
       tbody.innerHTML = '<tr><td colspan="2" style="text-align:center;color:#78909c;padding:30px;">新規検出履歴なし ✔</td></tr>';
       return;
     }
-    alerts.forEach(al => {
+
+    /* value: 0=Up, 1=Down, 2=Discovered, 3=Lost。「新規検出」の趣旨に合わせDiscoveredのみ表示する */
+    const events = await zbxCall('event.get', {
+      source: 1, object: 1, objectids: dserviceids,
+      output: 'extend',
+      sortfield: 'clock', sortorder: 'DESC', limit: 30
+    }, 43);
+
+    const discovered = (events || []).filter(e => e.value === '2');
+
+    tbody.innerHTML = '';
+    if (discovered.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="2" style="text-align:center;color:#78909c;padding:30px;">新規検出履歴なし ✔</td></tr>';
+      return;
+    }
+    discovered.forEach(ev => {
       const tr = document.createElement('tr');
-      const time = new Date(al.clock * 1000).toLocaleString('ja-JP');
-      tr.innerHTML = `<td>${time}</td><td>${al.subject || ''}</td>`;
+      const time = new Date(ev.clock * 1000).toLocaleString('ja-JP');
+      const ds = dserviceMap[ev.objectid];
+      const portLabel = ds ? (DISCOVERY_PORT_LABELS[ds.port] || `TCP ${ds.port}`) : '';
+      const content = ds ? `${ds.ip}（${portLabel}）` : `dserviceid ${ev.objectid}`;
+      tr.innerHTML = `<td>${time}</td><td>${content}</td>`;
       tbody.appendChild(tr);
     });
   } catch (e) {
