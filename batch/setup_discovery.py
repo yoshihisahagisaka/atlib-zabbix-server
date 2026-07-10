@@ -12,6 +12,11 @@
 にしておき、Zabbix管理画面で条件（特にDiscoveredの表示）を目視確認したうえで、
 人間が手動で有効化することを前提とする。
 
+顧客（notify_{customer_code}）への配信有無は、本スクリプトではなく顧客ポータルの
+通知設定トグル（msp-customer-portal側、zabbixClient.tsのsetUnknownDeviceAlertEnabled）
+が専任で管理する。本スクリプトは常に社内ユーザー（--notify-user、デフォルトatladmin）
+のみを送信先として作成する。
+
 背景: 本番Zabbixに「テストルール」「テストアクション」〜「テストアクション3」等、
 場当たり的に作られた複数のディスカバリルール・アクションが混在し、どれが正しいか
 判別できなくなっていた。これを解消するため、実際に動作実績のある「テストルール」
@@ -108,9 +113,9 @@ def main():
     customer_notify_username = f"notify_{args.customer_code}"
     customer_notify_user = _find_user(zabbix, customer_notify_username) if args.customer_code else None
     if customer_notify_user:
-        print(f"顧客通知ユーザー「{customer_notify_username}」: userid={customer_notify_user['userid']}（新規機器検知通知の送信先に追加）")
+        print(f"顧客通知ユーザー「{customer_notify_username}」: userid={customer_notify_user['userid']}（送信先への追加は顧客ポータルの通知設定トグルで管理されます。本スクリプトでは操作しません）")
     else:
-        print(f"顧客通知ユーザー「{customer_notify_username}」: 見つかりません（オンボーディング未実施、または顧客コード未指定）。社内向けのみで作成・更新します。")
+        print(f"顧客通知ユーザー「{customer_notify_username}」: 見つかりません（オンボーディング未実施、または顧客コード未指定）")
 
     print("\n作成予定のTCP/ICMPチェック:")
     print("  - ICMP ping（基本疎通）")
@@ -146,18 +151,18 @@ def main():
         _create_icmp_fallback_action(zabbix, icmp_action_name, druleid, group["groupid"])
         print(f"  [作成] アクション「{icmp_action_name}」を作成しました")
 
-    notify_userids = [u["userid"] for u in (notify_user, customer_notify_user) if u]
+    # 顧客(notify_{code})の送信先追加/除外は顧客ポータルの通知設定トグルが専任で管理する
+    # （zabbixClient.ts の setUnknownDeviceAlertEnabled）。本スクリプトが同時に書き込むと
+    # 競合するため、ここでは内部ユーザー（--notify-user）のみを対象にする。
+    notify_userids = [u["userid"] for u in (notify_user,) if u]
 
     if existing_new_device_action:
-        if customer_notify_user and _add_recipient_if_missing(zabbix, existing_new_device_action["actionid"], customer_notify_user["userid"]):
-            print(f"  [更新] アクション「{new_device_action_name}」の送信先に「{customer_notify_username}」を追加しました（status/条件は変更していません）")
-        else:
-            print(f"  [スキップ] アクション「{new_device_action_name}」は既に存在します（送信先変更なし）")
+        print(f"  [スキップ] アクション「{new_device_action_name}」は既に存在します")
     elif not notify_userids:
         print(f"  [スキップ] アクション「{new_device_action_name}」は通知先ユーザーが見つからないため作成しませんでした")
     else:
         _create_new_device_action(zabbix, new_device_action_name, druleid, notify_userids)
-        print(f"  [作成] アクション「{new_device_action_name}」を作成しました（無効状態、送信先: {len(notify_userids)}名）")
+        print(f"  [作成] アクション「{new_device_action_name}」を作成しました（無効状態、社内送信先のみ: {len(notify_userids)}名）")
 
     print("\n完了。Zabbix管理画面でルール・アクションの内容を確認してください。")
     print("既知の機器に対して実際に正しく検出・分類されることを確認したのち、")
@@ -336,38 +341,6 @@ def _create_new_device_action(zabbix: ZabbixClient, name: str, druleid: str, use
             },
         ],
     })
-
-
-def _add_recipient_if_missing(zabbix: ZabbixClient, actionid: str, userid: str) -> bool:
-    """既存の新規機器検知通知アクションの送信先に、指定ユーザーが含まれていなければ追加する。
-
-    status・conditions は一切変更しない（既に有効化されている場合、意図せず無効化しない
-    ため）。既に含まれていれば何もせず False を返す。
-    """
-    actions = zabbix.call("action.get", {
-        "actionids": actionid,
-        "output": ["actionid"],
-        "selectOperations": "extend",
-    })
-    if not actions:
-        return False
-    operations = actions[0]["operations"]
-
-    changed = False
-    for op in operations:
-        if op.get("operationtype") != "0":
-            continue
-        existing_userids = {u["userid"] for u in op.get("opmessage_usr", [])}
-        if userid in existing_userids:
-            continue
-        op["opmessage_usr"] = [{"userid": uid} for uid in sorted(existing_userids | {userid})]
-        changed = True
-
-    if not changed:
-        return False
-
-    zabbix.call("action.update", {"actionid": actionid, "operations": operations})
-    return True
 
 
 def _parse_args():
