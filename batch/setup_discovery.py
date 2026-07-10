@@ -105,6 +105,13 @@ def main():
     else:
         print(f"通知先ユーザー「{args.notify_user}」: [警告] 見つかりません。新規機器検知通知アクションは作成できません。")
 
+    customer_notify_username = f"notify_{args.customer_code}"
+    customer_notify_user = _find_user(zabbix, customer_notify_username) if args.customer_code else None
+    if customer_notify_user:
+        print(f"顧客通知ユーザー「{customer_notify_username}」: userid={customer_notify_user['userid']}（新規機器検知通知の送信先に追加）")
+    else:
+        print(f"顧客通知ユーザー「{customer_notify_username}」: 見つかりません（オンボーディング未実施、または顧客コード未指定）。社内向けのみで作成・更新します。")
+
     print("\n作成予定のTCP/ICMPチェック:")
     print("  - ICMP ping（基本疎通）")
     for port, desc in STANDARD_TCP_CHECKS:
@@ -139,13 +146,18 @@ def main():
         _create_icmp_fallback_action(zabbix, icmp_action_name, druleid, group["groupid"])
         print(f"  [作成] アクション「{icmp_action_name}」を作成しました")
 
+    notify_userids = [u["userid"] for u in (notify_user, customer_notify_user) if u]
+
     if existing_new_device_action:
-        print(f"  [スキップ] アクション「{new_device_action_name}」は既に存在します")
-    elif not notify_user:
+        if customer_notify_user and _add_recipient_if_missing(zabbix, existing_new_device_action["actionid"], customer_notify_user["userid"]):
+            print(f"  [更新] アクション「{new_device_action_name}」の送信先に「{customer_notify_username}」を追加しました（status/条件は変更していません）")
+        else:
+            print(f"  [スキップ] アクション「{new_device_action_name}」は既に存在します（送信先変更なし）")
+    elif not notify_userids:
         print(f"  [スキップ] アクション「{new_device_action_name}」は通知先ユーザーが見つからないため作成しませんでした")
     else:
-        _create_new_device_action(zabbix, new_device_action_name, druleid, notify_user["userid"])
-        print(f"  [作成] アクション「{new_device_action_name}」を作成しました（無効状態）")
+        _create_new_device_action(zabbix, new_device_action_name, druleid, notify_userids)
+        print(f"  [作成] アクション「{new_device_action_name}」を作成しました（無効状態、送信先: {len(notify_userids)}名）")
 
     print("\n完了。Zabbix管理画面でルール・アクションの内容を確認してください。")
     print("既知の機器に対して実際に正しく検出・分類されることを確認したのち、")
@@ -297,11 +309,13 @@ def _create_icmp_fallback_action(zabbix: ZabbixClient, name: str, druleid: str, 
     })
 
 
-def _create_new_device_action(zabbix: ZabbixClient, name: str, druleid: str, userid: str) -> None:
+def _create_new_device_action(zabbix: ZabbixClient, name: str, druleid: str, userids: list[str]) -> None:
     # 検出ステータス=Discovered（今回のスキャンで初めて検出、想定値=2）でのみ発火する。
     # SNMP機器登録／ICMPフォールバック登録が使う Up(0)/Down(1) とは異なる値のため、
     # 取り違えると既知の機器に対して毎サイクル誤通知が飛ぶ。安全のため status=1（無効）
     # で作成し、Zabbix管理画面での目視確認・手動有効化を必須とする。
+    # mediatypeid=0（受信者ごとに設定済みの全メディアで送信）にしているため、
+    # 社内ユーザー(Slack)・顧客ユーザー(メール)が混在していてもそれぞれの設定通りに届く。
     zabbix.call("action.create", {
         "name": name,
         "eventsource": 1,
@@ -315,9 +329,45 @@ def _create_new_device_action(zabbix: ZabbixClient, name: str, druleid: str, use
             ],
         },
         "operations": [
-            {"operationtype": 0, "opmessage_usr": [{"userid": userid}], "opmessage": {"default_msg": 1, "mediatypeid": 0}},
+            {
+                "operationtype": 0,
+                "opmessage_usr": [{"userid": uid} for uid in userids],
+                "opmessage": {"default_msg": 1, "mediatypeid": 0},
+            },
         ],
     })
+
+
+def _add_recipient_if_missing(zabbix: ZabbixClient, actionid: str, userid: str) -> bool:
+    """既存の新規機器検知通知アクションの送信先に、指定ユーザーが含まれていなければ追加する。
+
+    status・conditions は一切変更しない（既に有効化されている場合、意図せず無効化しない
+    ため）。既に含まれていれば何もせず False を返す。
+    """
+    actions = zabbix.call("action.get", {
+        "actionids": actionid,
+        "output": ["actionid"],
+        "selectOperations": "extend",
+    })
+    if not actions:
+        return False
+    operations = actions[0]["operations"]
+
+    changed = False
+    for op in operations:
+        if op.get("operationtype") != "0":
+            continue
+        existing_userids = {u["userid"] for u in op.get("opmessage_usr", [])}
+        if userid in existing_userids:
+            continue
+        op["opmessage_usr"] = [{"userid": uid} for uid in sorted(existing_userids | {userid})]
+        changed = True
+
+    if not changed:
+        return False
+
+    zabbix.call("action.update", {"actionid": actionid, "operations": operations})
+    return True
 
 
 def _parse_args():

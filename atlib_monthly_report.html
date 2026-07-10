@@ -571,11 +571,44 @@ body.export-mode #hub-alert-banner{display:none!important;}
 </div>
 
 <!-- ========================================
-     スライド 9：アップグレード提案
+     スライド 9：新規検出機器の履歴
      ======================================== -->
-<div class="slide" id="slide-9" style="border-top:8px solid #1a237e;">
+<div class="slide" id="slide-9">
   <div class="slide-header">
-    <h2>8. 貴社の体制や方針に合わせて選べる3つのプラン</h2>
+    <h2>8. 新規検出機器の履歴</h2>
+    <div class="slide-meta">atLIB インフラ運用サポート</div>
+  </div>
+  <div class="slide-body">
+    <p style="font-size:11px;color:#78909c;margin-bottom:8px;">
+      ディスカバリルールがSNMP応答機器を新規に検出した際の通知履歴です（本レポートのホストグループに対応するディスカバリルール・アクションが未設定の場合は表示されません）。
+    </p>
+    <div class="table-wrap">
+      <table class="report-table">
+        <thead>
+          <tr>
+            <th style="width:25%;">検出日時</th>
+            <th style="width:75%;">内容</th>
+          </tr>
+        </thead>
+        <tbody id="slide-newdevice-tbody">
+          <tr><td colspan="2" style="text-align:center;color:#78909c;padding:30px;">「データ同期」ボタンを押してください</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="slide-footer">
+    <div>CONFIDENTIAL</div>
+    <div class="footer-center">© 2026 atLIB Inc.</div>
+    <div>Page 9</div>
+  </div>
+</div>
+
+<!-- ========================================
+     スライド 10：アップグレード提案
+     ======================================== -->
+<div class="slide" id="slide-10" style="border-top:8px solid #1a237e;">
+  <div class="slide-header">
+    <h2>9. 貴社の体制や方針に合わせて選べる3つのプラン</h2>
     <div class="slide-meta">atLIB インフラ運用サポート</div>
   </div>
   <div class="slide-body" style="display:flex;flex-direction:column;gap:12px;">
@@ -703,7 +736,7 @@ body.export-mode #hub-alert-banner{display:none!important;}
   <div class="slide-footer">
     <div>CONFIDENTIAL</div>
     <div class="footer-center">© 2026 atLIB Inc.</div>
-    <div>Page 9</div>
+    <div>Page 10</div>
   </div>
 </div>
 
@@ -879,6 +912,10 @@ async function refreshReportData() {
 
     _renderIncidents(events, tFrom, tSec);
 
+    /* ---- ①-b 新規検出機器の履歴取得 ---- */
+    showStatus('info', '新規検出機器の履歴を取得中...');
+    await _loadNewDeviceHistory(gSel.value);
+
     /* ---- ② ホスト＋アイテム取得 ---- */
     showStatus('info', 'ホスト・アイテム情報取得中...');
     const allH = await zbxCall('host.get', {
@@ -1007,6 +1044,56 @@ function _renderIncidents(events, tFrom, tSec) {
 
   document.getElementById('kpi-incidents').textContent = incidentCount;
   document.getElementById('kpi-downtime').textContent  = Math.round(tDown / 60);
+}
+
+/* --------------------------------------------------
+   新規検出機器の履歴取得・描画
+   選択中のホストグループに紐づく「MSP_新規機器検知通知_{customer_code}」アクションを
+   opgroup（グループ割当先）から特定し、そのアクションの通知送信履歴(alert.get)を表示する。
+   対応するディスカバリルール・アクションが未設定の顧客では「データなし」表示になる。
+   -------------------------------------------------- */
+async function _loadNewDeviceHistory(groupId) {
+  const tbody = document.getElementById('slide-newdevice-tbody');
+  tbody.innerHTML = '<tr><td colspan="2" style="text-align:center;color:#78909c;padding:30px;">読み込み中...</td></tr>';
+
+  try {
+    const actions = await zbxCall('action.get', {
+      output: ['actionid', 'name'],
+      search: { name: 'MSP_新規機器検知通知_' },
+      selectOperations: 'extend',
+      filter: { eventsource: 1 }
+    }, 40);
+
+    const match = actions.find(a =>
+      (a.operations || []).some(op => (op.opgroup || []).some(g => g.groupid === groupId))
+    );
+
+    if (!match) {
+      tbody.innerHTML = '<tr><td colspan="2" style="text-align:center;color:#78909c;padding:30px;">このホストグループに対応するディスカバリ設定がありません</td></tr>';
+      return;
+    }
+
+    const alerts = await zbxCall('alert.get', {
+      actionids: [match.actionid],
+      output: ['alertid', 'clock', 'subject'],
+      sortfield: 'clock', sortorder: 'DESC', limit: 20
+    }, 41);
+
+    tbody.innerHTML = '';
+    if (!alerts || alerts.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="2" style="text-align:center;color:#78909c;padding:30px;">新規検出履歴なし ✔</td></tr>';
+      return;
+    }
+    alerts.forEach(al => {
+      const tr = document.createElement('tr');
+      const time = new Date(al.clock * 1000).toLocaleString('ja-JP');
+      tr.innerHTML = `<td>${time}</td><td>${al.subject || ''}</td>`;
+      tbody.appendChild(tr);
+    });
+  } catch (e) {
+    console.error('_loadNewDeviceHistory:', e);
+    tbody.innerHTML = '<tr><td colspan="2" style="text-align:center;color:#c62828;padding:30px;">取得エラー: ' + e.message + '</td></tr>';
+  }
 }
 
 /* --------------------------------------------------
