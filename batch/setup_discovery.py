@@ -41,7 +41,9 @@ from zabbix_client import ZabbixClient
 
 TEMPLATE_ID_SNMP = "10226"   # Network Generic Device by SNMP
 TEMPLATE_ID_ICMP = "10564"   # ICMP Ping
-SOURCE_RULE_NAME = "テストルール"  # snmp_communityとdcheck構造の複製元（動作実績あり）
+SOURCE_RULE_NAME = "テストルール"  # snmp_communityとdcheck構造の複製元（動作実績あり）。
+# 新規ルール作成時のみ参照する。既存ルールの再利用時は参照しないため、このルール
+# 自体が削除済みでも既存顧客に対する再実行（--applyの冪等性チェック等）は影響を受けない。
 
 # 標準チェックリスト（type, ports, 用途）。SNMPチェックのkey_・snmp_communityは
 # SOURCE_RULE_NAMEから複製するため、ここではTCP/ICMPチェックのみ定義する。
@@ -71,13 +73,6 @@ def main():
         sys.exit(1)
     print(f"ホストグループ「MSP/{args.company_name}」: groupid={group['groupid']}")
 
-    source_rule = _find_source_rule(zabbix)
-    if not source_rule:
-        print(f"[エラー] 複製元ルール「{SOURCE_RULE_NAME}」が見つかりません。")
-        sys.exit(1)
-    snmp_dchecks = [dc for dc in source_rule["dchecks"] if dc["type"] == "11"]
-    print(f"複製元ルール「{SOURCE_RULE_NAME}」: druleid={source_rule['druleid']}  SNMPチェック{len(snmp_dchecks)}件を複製")
-
     rule_name = f"MSP_インフラ自動検知_{args.customer_code}"
     snmp_action_name = f"MSP_SNMP機器登録_{args.customer_code}"
     icmp_action_name = f"MSP_ICMPフォールバック登録_{args.customer_code}"
@@ -85,6 +80,18 @@ def main():
 
     existing_rule = _find_rule_by_name(zabbix, rule_name)
     print(f"\nディスカバリルール「{rule_name}」: {'既に存在します（druleid=' + existing_rule['druleid'] + '）' if existing_rule else '未作成'}")
+
+    # 複製元ルールの参照は、新規にルールを作成する場合（＝SNMPチェックを複製する必要が
+    # ある場合）のみ必要。既に対象ルールが存在する場合は参照不要（テストルールは
+    # クリーンアップで削除済みのため、無条件に参照するとエラーになる）。
+    snmp_dchecks: list[dict] = []
+    if not existing_rule:
+        source_rule = _find_source_rule(zabbix)
+        if not source_rule:
+            print(f"[エラー] 複製元ルール「{SOURCE_RULE_NAME}」が見つかりません。")
+            sys.exit(1)
+        snmp_dchecks = [dc for dc in source_rule["dchecks"] if dc["type"] == "11"]
+        print(f"複製元ルール「{SOURCE_RULE_NAME}」: druleid={source_rule['druleid']}  SNMPチェック{len(snmp_dchecks)}件を複製")
     existing_snmp_action = _find_action_by_name(zabbix, snmp_action_name)
     print(f"アクション「{snmp_action_name}」: {'既に存在します' if existing_snmp_action else '未作成'}")
     existing_icmp_action = _find_action_by_name(zabbix, icmp_action_name)
