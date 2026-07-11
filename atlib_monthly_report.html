@@ -67,9 +67,11 @@ table.report-table tr:nth-child(even){background:#fbfbfc;}
 table.report-table tr:hover{background:#f0f4ff;}
 
 /* ===== トポロジーマップ ===== */
-#map-container{position:relative;width:100%;height:490px;}
-#topology-report-map{width:100%;height:100%;background:#f8f9fa;border:1px solid #cfd8dc;border-radius:6px;}
-.map-legend{position:absolute;top:10px;right:10px;background:rgba(255,255,255,0.97);border:1px solid #b0bec5;border-radius:6px;padding:8px 12px;font-size:10px;box-shadow:0 2px 8px rgba(0,0,0,0.08);z-index:100;width:190px;}
+/* 以前は.map-legendをグラフ上にposition:absoluteで重ねていたが、ノードが増えると
+   凡例パネルの下に隠れてしまう問題があったため、flexで横並びの別カラムに変更した。 */
+#map-container{width:100%;height:490px;display:flex;gap:12px;}
+#topology-report-map{flex:1;min-width:0;height:100%;background:#f8f9fa;border:1px solid #cfd8dc;border-radius:6px;}
+.map-legend{position:static;flex-shrink:0;width:190px;height:100%;overflow-y:auto;background:rgba(255,255,255,0.97);border:1px solid #b0bec5;border-radius:6px;padding:8px 12px;font-size:10px;box-shadow:0 2px 8px rgba(0,0,0,0.08);}
 .legend-title{font-weight:700;color:#1a237e;border-bottom:1px solid #cfd8dc;padding-bottom:3px;margin-bottom:6px;font-size:10.5px;}
 .legend-item{display:flex;align-items:center;gap:6px;margin-bottom:4px;}
 .legend-line{width:22px;height:0;border-top-width:2.5px;flex-shrink:0;}
@@ -770,6 +772,7 @@ let globalRealHostNames    = new Set(); // 実機（Zabbixホスト）の名前�
 let globalHostRoleByName   = {};   // 実機の役割（Zabbixホストタグ tag="role" 由来。顧客ポータルが書き込み元）
 let globalHostUplinkByName = {};   // 実機の手動上位接続先（tag="uplink"）
 let globalHostCableTypeByName = {}; // 実機のケーブル種別（tag="cableType"）
+let globalHostUplinkPortByName = {}; // 実機の上位ポート（tag="uplinkPort"）
 
 /* 機器の役割・手動接続情報を取得する。実機（Zabbixホスト）はタグ由来、手動追加機器（監視外）は
    従来どおりlocalStorageから読む（顧客ポータルにはZabbixホストが存在しないため紐付けようがない）。
@@ -797,6 +800,12 @@ function getHostCableType(name) {
     return globalHostCableTypeByName[name] || 'cat6';
   }
   return ls(`m-if-type-${name}`) || 'cat6';
+}
+function getHostUplinkPort(name) {
+  if (isHostConnectionManaged(name)) {
+    return globalHostUplinkPortByName[name] || '';
+  }
+  return ls(`m-if-port-${name}`) || '';
 }
 
 /* ---- インターフェース一覧 並べ替え状態 ---- */
@@ -963,14 +972,17 @@ async function refreshReportData() {
     globalHostRoleByName   = {};
     globalHostUplinkByName = {};
     globalHostCableTypeByName = {};
+    globalHostUplinkPortByName = {};
     allH.forEach(h => {
       const tags = h.tags || [];
-      const roleTag      = tags.find(t => t.tag === 'role');
-      const uplinkTag    = tags.find(t => t.tag === 'uplink');
-      const cableTypeTag = tags.find(t => t.tag === 'cableType');
-      if (roleTag)      globalHostRoleByName[h.name]      = roleTag.value;
-      if (uplinkTag)    globalHostUplinkByName[h.name]    = uplinkTag.value;
-      if (cableTypeTag) globalHostCableTypeByName[h.name] = cableTypeTag.value;
+      const roleTag       = tags.find(t => t.tag === 'role');
+      const uplinkTag     = tags.find(t => t.tag === 'uplink');
+      const cableTypeTag  = tags.find(t => t.tag === 'cableType');
+      const uplinkPortTag = tags.find(t => t.tag === 'uplinkPort');
+      if (roleTag)       globalHostRoleByName[h.name]       = roleTag.value;
+      if (uplinkTag)      globalHostUplinkByName[h.name]     = uplinkTag.value;
+      if (cableTypeTag)   globalHostCableTypeByName[h.name]  = cableTypeTag.value;
+      if (uplinkPortTag)  globalHostUplinkPortByName[h.name] = uplinkPortTag.value;
     });
 
     const hIds = allH.map(h => h.hostid);
@@ -1655,13 +1667,17 @@ function _renderInterfaceTable(allH, manualHosts) {
     const label = CABLE_TYPE_LABELS_JA[cur] || cur;
     return `<span style="font-size:11px;color:#546e7a;">${label} 🔒</span>`;
   }
+  function makePortBadge(cur) {
+    const text = cur ? cur : '未設定';
+    return `<span style="font-size:11px;color:#546e7a;" title="上位ポートは顧客ポータルで設定してください">${text} 🔒</span>`;
+  }
 
   const entries = [];
   allH.forEach(h => {
     entries.push({
       name: h.name, isManual: false,
       role:   getHostRole(h.name),
-      port:   ls(`m-if-port-${h.name}`) || '',
+      port:   getHostUplinkPort(h.name),
       remote: getHostUplink(h.name),
       type:   getHostCableType(h.name)
     });
@@ -1670,7 +1686,7 @@ function _renderInterfaceTable(allH, manualHosts) {
     entries.push({
       name: hName, isManual: true, idx,
       role:   getHostRole(hName),
-      port:   ls(`m-if-port-${hName}`) || '',
+      port:   getHostUplinkPort(hName),
       remote: getHostUplink(hName),
       type:   getHostCableType(hName)
     });
@@ -1720,7 +1736,7 @@ function _renderInterfaceTable(allH, manualHosts) {
     tr.innerHTML = `
       <td><div style="display:flex;align-items:center;gap:4px;">${handle}${prefix}${nameCell}</div></td>
       <td>${e.isManual ? makeRoleSelect(e.name, e.role) : makeRoleBadge(e.role)}</td>
-      <td><div contenteditable="true" class="editable-cell" data-host="${e.name}" data-type="port" oninput="saveManualIF(this)">${e.port}</div></td>
+      <td>${e.isManual ? `<div contenteditable="true" class="editable-cell" data-host="${e.name}" data-type="port" oninput="saveManualIF(this)">${e.port}</div>` : makePortBadge(e.port)}</td>
       <td>${e.isManual ? `<div contenteditable="true" class="editable-cell" data-host="${e.name}" data-type="remote" oninput="saveManualIF(this)">${e.remote}</div>` : makeUplinkBadge(e.remote)}</td>
       <td>${e.isManual ? makeTypeSelect(e.name, e.type, delBtn) : makeCableTypeBadge(e.type) + delBtn}</td>`;
     mT.appendChild(tr);
@@ -1735,6 +1751,40 @@ function _renderInterfaceTable(allH, manualHosts) {
    トポロジーマップ描画（Vis.js）
    バカハブ自動挿入ロジック付き
    ================================================== */
+/**
+ * ノードの階層（level）を役割の固定値ではなく、実際の接続関係（LLDPエッジ／手動指定の
+ * 上位接続先）を辿った深さで決める。役割が同じでも接続の深さが違う機器（例: スイッチ配下に
+ * 別のスイッチがぶら下がるケース）を正しく別の段に配置するための計算
+ * （msp-customer-portal/public/topology.html の computeLevels と同じ考え方）。
+ */
+function _computeTopologyLevels() {
+  const names = new Set(globalTopologyNodes.map(n => n.name.trim()));
+  const parentOf = {};
+  // LLDPエッジ（fromName→toName）が優先: toNameをfromNameの子として扱う
+  globalTopologyEdges.forEach(e => {
+    const from = (e.fromName || '').trim();
+    const to   = (e.toName || '').trim();
+    if (names.has(to) && parentOf[to] === undefined) parentOf[to] = from;
+  });
+  // LLDPで親が決まっていないノードのみ、手動指定の上位接続先を使う
+  globalTopologyNodes.forEach(n => {
+    const name = n.name.trim();
+    if (parentOf[name] !== undefined) return;
+    const up = (getHostUplink(name) || '').trim();
+    if (up && names.has(up)) parentOf[name] = up;
+  });
+
+  const cache = {};
+  function levelOf(name, seen) {
+    if (cache[name] !== undefined) return cache[name];
+    const parent = parentOf[name];
+    if (!parent || parent === name || seen.has(name)) return (cache[name] = 0);
+    return (cache[name] = levelOf(parent, new Set(seen).add(name)) + 1);
+  }
+  globalTopologyNodes.forEach(n => levelOf(n.name.trim(), new Set()));
+  return cache;
+}
+
 function _renderTopologyMap() {
   const container = document.getElementById('topology-report-map');
 
@@ -1742,8 +1792,9 @@ function _renderTopologyMap() {
   const nodes = [];
   const edges = [];
   const labelToId = {};
+  const topoLevels = _computeTopologyLevels();
 
-  /* 役割 → 外見マップ */
+  /* 役割 → 外見マップ（levelは接続深さ計算のフォールバック用のみに使用） */
   const roleStyle = {
     router:  { background:'#1a237e', border:'#0d1b3e', size:16, level:0 },
     switch:  { background:'#f57c00', border:'#e65100', size:14, level:1 },
@@ -1756,12 +1807,13 @@ function _renderTopologyMap() {
   globalTopologyNodes.forEach(h => {
     const role  = getHostRole(h.name);
     const style = roleStyle[role] || roleStyle.other;
+    const level = topoLevels[h.name.trim()] ?? style.level;
     nodes.push({
       id:    h.id,
       label: `${h.name}\n${h.ip}`,
       shape: 'dot',
       size:  style.size,
-      level: style.level,
+      level,
       color: { background: style.background, border: style.border, highlight: { background: '#fff176', border: style.border } },
       font:  { size: 10, face: 'Noto Sans JP,Arial', strokeWidth: 3, strokeColor: '#ffffff' },
       title: `${h.name} (${h.ip})\n役割: ${role}`
@@ -1854,9 +1906,10 @@ detectedHubs.forEach(hub => {
   /* ---- LLDPエッジ ---- */
   globalTopologyEdges.forEach(e => {
     if (!labelToId[e.toName]) {
+      const fromLevel = topoLevels[(e.fromName || '').trim()] ?? 0;
       nodes.push({
         id: e.toName, label: `${e.toName}\n(LLDP対向)`,
-        shape: 'dot', size: 11, level: 1,
+        shape: 'dot', size: 11, level: fromLevel + 1,
         color: { background: '#26a69a', border: '#004d40' },
         font:  { size: 10, face: 'Arial', strokeWidth: 3, strokeColor: '#ffffff' }
       });
@@ -1911,12 +1964,10 @@ const options = {
     tooltipDelay: 200
   },
   edges: {
-    smooth: {
-      type: 'cubicBezier',
-      forceDirection: 'vertical',
-      roundness: 0.4
-    },
-    arrows: { 
+    // 完全な直角「カギ線」はvis-network標準では描けないため、直線（smooth無効）にする
+    // （msp-customer-portal/public/topology.htmlと同じ設定）。
+    smooth: false,
+    arrows: {
       to: { enabled: true, scaleFactor: 0.6 }  // ★ 矢印追加で流れを明確化
     }
   },
