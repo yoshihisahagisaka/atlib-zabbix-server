@@ -37,8 +37,13 @@ foreach ($key in $docs.Keys) {
   $out = $out.Replace($key, $content)
 }
 
+# Claude Artifactは <!doctype html><head>...</head><body> の骨格を自動付与するが、
+# nginxで直接配信するこのファイルには骨格が無いため、文字コード判定に失敗し文字化けする。
+# ここで明示的にDOCTYPE・meta charsetを付与した完全なHTML文書にする。
+$wrapped = "<!DOCTYPE html>`r`n<html lang=`"ja`">`r`n<head>`r`n<meta charset=`"UTF-8`">`r`n</head>`r`n<body>`r`n$out`r`n</body>`r`n</html>`r`n"
+
 $outPath = "$repo\zabbixserver\runbooks.html"
-[System.IO.File]::WriteAllText($outPath, $out, [System.Text.UTF8Encoding]::new($false))
+[System.IO.File]::WriteAllText($outPath, $wrapped, [System.Text.UTF8Encoding]::new($false))
 
 Write-Output "Wrote: $outPath"
 Write-Output "Size: $((Get-Item $outPath).Length) bytes"
