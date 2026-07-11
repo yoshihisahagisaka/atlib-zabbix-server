@@ -78,10 +78,6 @@ table.report-table tr:hover{background:#f0f4ff;}
 .legend-circle{width:10px;height:10px;border-radius:50%;border:1px solid rgba(0,0,0,0.15);flex-shrink:0;}
 .legend-sep{height:1px;background:#eceff1;margin:5px 0;}
 
-/* ===== バカハブ検出バナー ===== */
-#hub-alert-banner{display:none;background:linear-gradient(90deg,#b71c1c,#e53935);color:#fff;border-radius:6px;padding:8px 14px;margin-bottom:10px;font-size:12px;font-weight:700;align-items:center;gap:8px;}
-#hub-alert-banner.visible{display:flex;}
-
 /* ===== インターフェース一覧 並べ替えトグル ===== */
 .sort-toggle{display:inline-flex;border:1px solid #b0bec5;border-radius:4px;overflow:hidden;vertical-align:middle;}
 .sort-toggle .sort-btn{background:#f5f5f5;color:#546e7a;border:none;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;transition:background .2s,color .2s;border-right:1px solid #cfd8dc;}
@@ -150,7 +146,6 @@ body.export-mode .manual-row{background:#fff!important;}
 body.export-mode .editable-cell{border:none!important;background:transparent!important;}
 body.export-mode .editable-inline{border:none!important;background:transparent!important;}
 body.export-mode .btn{display:none!important;}
-body.export-mode #hub-alert-banner{display:none!important;}
 </style>
 </head>
 <body>
@@ -370,11 +365,6 @@ body.export-mode #hub-alert-banner{display:none!important;}
     <div class="slide-meta">atLIB インフラ運用サポート</div>
   </div>
   <div class="slide-body">
-    <!-- バカハブ検出警告バナー -->
-    <div id="hub-alert-banner">
-      <span style="font-size:18px;">⚠️</span>
-      <span id="hub-alert-text">未管理ハブ (バカハブ) を検出しました</span>
-    </div>
     <div id="map-container">
       <div id="topology-report-map"></div>
       <div class="map-legend">
@@ -412,14 +402,6 @@ body.export-mode #hub-alert-banner{display:none!important;}
         <div class="legend-item">
           <div class="legend-circle" style="background:#7b1fa2;"></div>
           <span>プリンター / 周辺機器</span>
-        </div>
-        <div class="legend-item">
-          <div class="legend-circle" style="background:#b71c1c;border:2px solid #ff1744;"></div>
-          <span style="color:#b71c1c;font-weight:700;">未管理ハブ（自動検出）</span>
-        </div>
-        <div class="legend-item">
-          <div class="legend-circle" style="background:#78909c;border:1px dashed #546e7a;"></div>
-          <span style="color:#78909c;">ハブ配下端末（推定）</span>
         </div>
       </div>
     </div>
@@ -763,7 +745,6 @@ const EDIT_IDS = [
 let globalTopologyNodes  = [];
 let globalTopologyEdges  = [];
 let cachedActiveHosts    = [];
-let detectedHubs         = [];   // バカハブ情報キャッシュ
 let visNetworkInstance   = null;
 let globalAllH           = [];   // ホストキャッシュ（トラフィック用）
 let globalItems          = [];   // アイテムキャッシュ（トラフィック用）
@@ -992,18 +973,13 @@ async function refreshReportData() {
       searchWildcardsEnabled: true
     }, 2) : [];
 
-    /* ---- ③ ARPテーブル取得（バカハブ検出） ---- */
-    showStatus('info', 'ARPテーブル解析中（未管理ハブ検出）...');
-    await _detectUnmanagedHubs(hIds, items, allH);
-
-    /* ---- ④ 各スライド描画 ---- */
+    /* ---- ③ 各スライド描画 ---- */
     _renderInventory(allH, items);
     _buildTopologyData(allH, items);
     _renderTopologyMap();
 
-    /* ---- KPI更新 ---- */
+    /* ---- KPI更新（kpi-unknownは_loadNewDeviceHistory内で更新） ---- */
     document.getElementById('kpi-hosts').textContent = allH.length;
-    document.getElementById('kpi-unknown').textContent = detectedHubs.length;
 
     /* ---- トラフィックスライド更新 ---- */
     globalAllH  = allH;
@@ -1145,6 +1121,8 @@ async function _loadNewDeviceHistory(groupId) {
 
     if (!match) {
       tbody.innerHTML = '<tr><td colspan="2" style="text-align:center;color:#78909c;padding:30px;">このホストグループに対応するディスカバリ設定がありません</td></tr>';
+      const kpiUnknown0 = document.getElementById('kpi-unknown');
+      if (kpiUnknown0) kpiUnknown0.textContent = '0';
       return;
     }
 
@@ -1152,6 +1130,8 @@ async function _loadNewDeviceHistory(groupId) {
     const druleid = druleCond && druleCond.value;
     if (!druleid) {
       tbody.innerHTML = '<tr><td colspan="2" style="text-align:center;color:#78909c;padding:30px;">ディスカバリルールを特定できませんでした</td></tr>';
+      const kpiUnknown1 = document.getElementById('kpi-unknown');
+      if (kpiUnknown1) kpiUnknown1.textContent = '0';
       return;
     }
 
@@ -1171,6 +1151,8 @@ async function _loadNewDeviceHistory(groupId) {
 
     if (dserviceids.length === 0) {
       tbody.innerHTML = '<tr><td colspan="2" style="text-align:center;color:#78909c;padding:30px;">新規検出履歴なし ✔</td></tr>';
+      const kpiUnknown2 = document.getElementById('kpi-unknown');
+      if (kpiUnknown2) kpiUnknown2.textContent = '0';
       return;
     }
 
@@ -1182,6 +1164,11 @@ async function _loadNewDeviceHistory(groupId) {
     }, 43);
 
     const discovered = (events || []).filter(e => e.value === '2');
+
+    /* KPI「未知デバイス検出」は、精度の低かったバカハブ検出（2026-07-11廃止）に代えて、
+       ディスカバリベースの新規検出機器の履歴件数を表示する。 */
+    const kpiUnknown = document.getElementById('kpi-unknown');
+    if (kpiUnknown) kpiUnknown.textContent = discovered.length;
 
     tbody.innerHTML = '';
     if (discovered.length === 0) {
@@ -1318,140 +1305,6 @@ function _renderInventory(allH, items) {
   if (tbody.innerHTML === '') {
     tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:30px;color:#78909c;">資産データなし</td></tr>';
   }
-}
-
-/* ==================================================
-   バカハブ自動検出
-   判定条件：
-     1. AP役割のホストは除外（無線クライアントの集約は正常動作）
-     2. LLDPネイバーが確認できるポートは除外（管理対象機器が接続済み）
-     3. JSON内にネイバー情報が含まれる場合も除外
-     4. アップリンクポート（最小MAC数）は除外
-     5. 残ったポートでMAC数が閾値以上 → バカハブ判定
-   ================================================== */
-async function _detectUnmanagedHubs(hIds, items, allH) {
-  detectedHubs = [];
-  if (hIds.length === 0) return;
-
-  const HUB_THRESHOLD            = 4;   // 閾値：4台以上
-  const HIGH_CONFIDENCE_THRESHOLD = 20;  // 高確度：20台以上
-
-  const hubItems = items.filter(i =>
-    i.key_ === 'snmp.hub.mac.max.count' ||
-    i.key_.toLowerCase().includes('hub.mac.max.count')
-  );
-
-  if (hubItems.length === 0) {
-    console.log('[バカハブ検出] 対象アイテムなし');
-    return;
-  }
-
-  hubItems.forEach(item => {
-    if (!item.lastvalue) return;
-
-    const host     = allH.find(h => h.hostid === item.hostid);
-    const hostName = host ? host.name : `HostID:${item.hostid}`;
-
-    /* ── 除外①: AP役割のホスト ──
-       APは複数の無線クライアントMACを集約するため誤検知になる */
-    const hostRole = getHostRole(hostName);
-    if (hostRole === 'ap') {
-      console.log(`[バカハブ検出] ${hostName}: AP役割のためスキップ`);
-      return;
-    }
-
-    /* ── LLDPネイバーポート一覧を構築 ──
-       このホストのLLDP sysname アイテムを探し、キーからポート番号を抽出する。
-       LLDPネイバーが存在 = 管理対象機器が接続 = バカハブではない */
-    const lldpPortsWithNeighbor = new Set();
-    items
-      .filter(i => i.hostid === item.hostid &&
-                   i.key_.includes('lldp.rem') &&
-                   i.key_.includes('sysname') &&
-                   i.lastvalue)
-      .forEach(li => {
-        /* キー例: lldp.rem.sysname[1.1] / lldp.rem[1,sysname] など
-           最初の数値トークンをポートインデックスとして扱う */
-        const m = li.key_.match(/\[(\d+)/);
-        if (m) lldpPortsWithNeighbor.add(parseInt(m[1], 10));
-      });
-
-    console.log(`[バカハブ検出] ${hostName}: LLDPポート=[${[...lldpPortsWithNeighbor].join(',')}]`);
-
-    let data;
-    try {
-      data = JSON.parse(item.lastvalue);
-    } catch (e) {
-      console.error(`[バカハブ検出] JSON解析エラー (${hostName}):`, e);
-      return;
-    }
-
-    if (!data || !Array.isArray(data.portStats)) {
-      console.warn(`[バカハブ検出] ${hostName}: portStats が不正`);
-      return;
-    }
-
-    const parentHostId = `host-${item.hostid}`;
-
-    /* アップリンクポート推定（ポート群の中でMAC数が最小かつ2以下） */
-    let uplinkPort = null;
-    if (data.portStats.length > 1) {
-      const minEntry = data.portStats.reduce((a, b) => a.macCount <= b.macCount ? a : b);
-      if (minEntry.macCount <= 2) uplinkPort = minEntry.port;
-    }
-
-    data.portStats.forEach(ps => {
-      const port     = ps.port;
-      const macCount = ps.macCount || 0;
-
-      /* 除外②: アップリンクポート */
-      if (port === uplinkPort) {
-        console.log(`[バカハブ検出] IF${port}: アップリンクのためスキップ`);
-        return;
-      }
-
-      /* 除外③: LLDPネイバーが確認済みのポート（管理対象機器） */
-      if (lldpPortsWithNeighbor.has(port)) {
-        console.log(`[バカハブ検出] IF${port}: LLDPネイバーあり → スキップ`);
-        return;
-      }
-
-      /* 除外④: JSONにネイバー情報が直接含まれている場合 */
-      if (ps.lldpNeighbor || ps.lldpSysname || ps.neighbor) {
-        console.log(`[バカハブ検出] IF${port}: JSON内ネイバー情報あり → スキップ`);
-        return;
-      }
-
-      /* 除外⑤: MAC数が閾値未満 */
-      if (macCount < HUB_THRESHOLD) return;
-
-      const confidence = macCount >= HIGH_CONFIDENCE_THRESHOLD ? 'high' : 'medium';
-      detectedHubs.push({
-        id:           `hub-${item.hostid}-if${port}`,
-        label:        `未管理ハブ疑い\n(${hostName} IF${port})`,
-        parentHostId: parentHostId,
-        port:         port,
-        macCount:     macCount,
-        confidence:   confidence,
-        hostName:     hostName
-      });
-      console.log(`[バカハブ検出] ✓ ${hostName} IF${port}: ${macCount}台 (確度:${confidence})`);
-    });
-  });
-
-  /* 警告バナー更新 */
-  const banner    = document.getElementById('hub-alert-banner');
-  const alertText = document.getElementById('hub-alert-text');
-  if (detectedHubs.length > 0) {
-    banner.classList.add('visible');
-    const details = detectedHubs.map(h =>
-      `${h.confidence === 'high' ? '🔴' : '🟡'}${h.hostName}/IF${h.port}(${h.macCount}台)`
-    ).join(' | ');
-    alertText.textContent = `⚠️ 未管理ハブ（バカハブ）を ${detectedHubs.length} 箇所で検出: ${details}`;
-  } else {
-    banner.classList.remove('visible');
-  }
-  console.log(`[バカハブ検出] 最終結果: ${detectedHubs.length}件`, detectedHubs);
 }
 
 /* ==================================================
@@ -1749,7 +1602,6 @@ function _renderInterfaceTable(allH, manualHosts) {
 
 /* ==================================================
    トポロジーマップ描画（Vis.js）
-   バカハブ自動挿入ロジック付き
    ================================================== */
 /**
  * ノードの階層（level）を役割の固定値ではなく、実際の接続関係（LLDPエッジ／手動指定の
@@ -1821,88 +1673,6 @@ function _renderTopologyMap() {
     labelToId[h.name.trim()] = h.id;
   });
 
-/* ---- バカハブノードを挿入 ---- */
-detectedHubs.forEach(hub => {
-  /* parentHostId は _detectUnmanagedHubs で host-${hostid} に設定済み。
-     親ノードのレベルを取得してその +1 に配置することで、
-     AP配下などに誤配置されるのを防ぐ。 */
-  const parentId    = hub.parentHostId;
-  const parentNode  = nodes.find(n => n.id === parentId);
-  const parentLevel = parentNode ? (parentNode.level ?? 0) : 0;
-  const hubLevel    = parentLevel + 1;
-  const summaryLevel = parentLevel + 2;
-
-  /* 未管理ハブノード */
-  nodes.push({
-    id:    hub.id,
-    label: `⚠️未管理ハブ\nIF${hub.port}`,
-    shape: 'diamond',
-    size:  20,
-    level: hubLevel,
-    color: {
-      background: hub.confidence === 'high' ? '#b71c1c' : '#e65100',
-      border:     '#ff1744',
-      highlight:  { background: '#ffcdd2', border: '#ff1744' }
-    },
-    font: {
-      size:        12,
-      face:        'Noto Sans JP,Arial',
-      color:       '#b71c1c',
-      strokeWidth: 3,
-      strokeColor: '#ffffff',
-      bold:        true
-    },
-    title: `【未管理ハブ検出】\n接続機器: ${hub.hostName}\nIF${hub.port}\n検出MAC数: ${hub.macCount}台\n\n推奨: 管理スイッチへ交換`
-  });
-
-  /* 親 → ハブ */
-  if (parentId) {
-    edges.push({
-      from:  parentId,
-      to:    hub.id,
-      width: 3,
-      color: { color: '#e53935', opacity: 0.9 },
-      dashes: [8, 4],
-      title: `未管理ハブ接続 (IF${hub.port})`
-    });
-  }
-
-  /* 端末群集約ノード */
-  const summaryId = `${hub.id}-summary`;
-  nodes.push({
-    id:    summaryId,
-    label: `配下端末群\n${hub.macCount}台`,
-    shape: 'database',
-    size:  16,
-    level: summaryLevel,
-    color: {
-      background: '#fff3e0',
-      border:     '#ff8f00',
-      highlight:  { background: '#ffe0b2', border: '#f57c00' }
-    },
-    font: {
-      size:        12,
-      face:        'Noto Sans JP,Arial',
-      color:       '#bf360c',
-      strokeWidth: 2,
-      strokeColor: '#ffffff',
-      bold:        true
-    },
-    title: `ハブ配下端末（推定）\n総数: ${hub.macCount}台\n※詳細にはSNMP管理スイッチが必要`
-  });
-
-  edges.push({
-    from:  hub.id,
-    to:    summaryId,
-    width: 2,
-    color: { color: '#ff8f00', opacity: 0.8 },
-    dashes: [4, 4],
-    title: `${hub.macCount}台接続中`
-  });
-
-  labelToId[hub.id] = hub.id;
-});
-
   /* ---- LLDPエッジ ---- */
   globalTopologyEdges.forEach(e => {
     if (!labelToId[e.toName]) {
@@ -1966,10 +1736,7 @@ const options = {
   edges: {
     // 完全な直角「カギ線」はvis-network標準では描けないため、直線（smooth無効）にする
     // （msp-customer-portal/public/topology.htmlと同じ設定）。
-    smooth: false,
-    arrows: {
-      to: { enabled: true, scaleFactor: 0.6 }  // ★ 矢印追加で流れを明確化
-    }
+    smooth: false
   },
   nodes: {
     shadow: { enabled: true, size: 6, x: 3, y: 3 }
@@ -2344,7 +2111,6 @@ window.addEventListener('DOMContentLoaded', () => {
   globalTopologyNodes = [];
   globalTopologyEdges = [];
   cachedActiveHosts   = [];
-  detectedHubs        = [];
   _renderTopologyMap();
 });
 </script>
