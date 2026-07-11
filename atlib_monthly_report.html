@@ -766,17 +766,37 @@ let visNetworkInstance   = null;
 let globalAllH           = [];   // ホストキャッシュ（トラフィック用）
 let globalItems          = [];   // アイテムキャッシュ（トラフィック用）
 let trafficChartInstance = null;
-let globalHostRoleByName = {};   // 実機の役割（Zabbixホストタグ tag="role" 由来。顧客ポータルが書き込み元）
+let globalRealHostNames    = new Set(); // 実機（Zabbixホスト）の名前一覧。役割・接続情報の判定に使う
+let globalHostRoleByName   = {};   // 実機の役割（Zabbixホストタグ tag="role" 由来。顧客ポータルが書き込み元）
+let globalHostUplinkByName = {};   // 実機の手動上位接続先（tag="uplink"）
+let globalHostCableTypeByName = {}; // 実機のケーブル種別（tag="cableType"）
 
-/* 機器の役割を取得する。実機（Zabbixホスト）はタグ由来、手動追加機器（監視外）は
+/* 機器の役割・手動接続情報を取得する。実機（Zabbixホスト）はタグ由来、手動追加機器（監視外）は
    従来どおりlocalStorageから読む（顧客ポータルにはZabbixホストが存在しないため紐付けようがない）。
-   役割の編集は顧客ポータル（msp-customer-portal/public/topology.html）で行う運用に統一したため、
-   このツールでは実機の役割は表示のみで編集UIを持たない。 */
+   編集は顧客ポータル（msp-customer-portal/public/topology.html）で行う運用に統一したため、
+   このツールでは実機のこれらの項目は表示のみで編集UIを持たない。
+   タグ自体が未設定の実機（役割未設定等）もあり得るため、判定は globalHostRoleByName の有無ではなく
+   globalRealHostNames（allHから毎回全件再構築）で行う。 */
+function isHostConnectionManaged(name) {
+  return globalRealHostNames.has(name);
+}
 function getHostRole(name) {
-  if (Object.prototype.hasOwnProperty.call(globalHostRoleByName, name)) {
-    return globalHostRoleByName[name];
+  if (isHostConnectionManaged(name)) {
+    return globalHostRoleByName[name] || 'other';
   }
   return ls(`m-if-role-${name}`) || 'other';
+}
+function getHostUplink(name) {
+  if (isHostConnectionManaged(name)) {
+    return globalHostUplinkByName[name] || '';
+  }
+  return ls(`m-if-remote-${name}`) || '';
+}
+function getHostCableType(name) {
+  if (isHostConnectionManaged(name)) {
+    return globalHostCableTypeByName[name] || 'cat6';
+  }
+  return ls(`m-if-type-${name}`) || 'cat6';
 }
 
 /* ---- インターフェース一覧 並べ替え状態 ---- */
@@ -939,10 +959,18 @@ async function refreshReportData() {
       selectTriggers: ['description','value']
     }, 31);
 
-    globalHostRoleByName = {};
+    globalRealHostNames    = new Set(allH.map(h => h.name));
+    globalHostRoleByName   = {};
+    globalHostUplinkByName = {};
+    globalHostCableTypeByName = {};
     allH.forEach(h => {
-      const roleTag = (h.tags || []).find(t => t.tag === 'role');
-      if (roleTag) globalHostRoleByName[h.name] = roleTag.value;
+      const tags = h.tags || [];
+      const roleTag      = tags.find(t => t.tag === 'role');
+      const uplinkTag    = tags.find(t => t.tag === 'uplink');
+      const cableTypeTag = tags.find(t => t.tag === 'cableType');
+      if (roleTag)      globalHostRoleByName[h.name]      = roleTag.value;
+      if (uplinkTag)    globalHostUplinkByName[h.name]    = uplinkTag.value;
+      if (cableTypeTag) globalHostCableTypeByName[h.name] = cableTypeTag.value;
     });
 
     const hIds = allH.map(h => h.hostid);
@@ -1617,24 +1645,34 @@ function _renderInterfaceTable(allH, manualHosts) {
     ].map(([v,t]) => `<option value="${v}"${cur===v?' selected':''}>${t}</option>`).join('');
     return `<select data-host="${hName}" data-type="type" onchange="saveManualSelect(this)" style="width:${extra?'70%':'100%'};font-size:11px;padding:4px;border:1px solid #b0bec5;border-radius:4px;">${opts}</select>${extra}`;
   }
+  const CABLE_TYPE_LABELS_JA = { cat6: 'Cat6 (1G)', cat5e: 'Cat5e (100M)', wifi: 'Wi-Fi' };
+  /* 実機の上位接続先・ケーブル種別も役割と同様、顧客ポータルで設定する運用のため表示のみ。 */
+  function makeUplinkBadge(cur) {
+    const text = cur ? cur : '未設定（LLDP自動）';
+    return `<span style="font-size:11px;color:#546e7a;" title="接続先は顧客ポータルで設定してください">${text} 🔒</span>`;
+  }
+  function makeCableTypeBadge(cur) {
+    const label = CABLE_TYPE_LABELS_JA[cur] || cur;
+    return `<span style="font-size:11px;color:#546e7a;">${label} 🔒</span>`;
+  }
 
   const entries = [];
   allH.forEach(h => {
     entries.push({
       name: h.name, isManual: false,
       role:   getHostRole(h.name),
-      port:   ls(`m-if-port-${h.name}`)   || '',
-      remote: ls(`m-if-remote-${h.name}`) || '',
-      type:   ls(`m-if-type-${h.name}`)   || 'cat6'
+      port:   ls(`m-if-port-${h.name}`) || '',
+      remote: getHostUplink(h.name),
+      type:   getHostCableType(h.name)
     });
   });
   manualHosts.forEach((hName, idx) => {
     entries.push({
       name: hName, isManual: true, idx,
       role:   getHostRole(hName),
-      port:   ls(`m-if-port-${hName}`)   || '',
-      remote: ls(`m-if-remote-${hName}`) || '',
-      type:   ls(`m-if-type-${hName}`)   || 'cat6'
+      port:   ls(`m-if-port-${hName}`) || '',
+      remote: getHostUplink(hName),
+      type:   getHostCableType(hName)
     });
   });
 
@@ -1683,8 +1721,8 @@ function _renderInterfaceTable(allH, manualHosts) {
       <td><div style="display:flex;align-items:center;gap:4px;">${handle}${prefix}${nameCell}</div></td>
       <td>${e.isManual ? makeRoleSelect(e.name, e.role) : makeRoleBadge(e.role)}</td>
       <td><div contenteditable="true" class="editable-cell" data-host="${e.name}" data-type="port" oninput="saveManualIF(this)">${e.port}</div></td>
-      <td><div contenteditable="true" class="editable-cell" data-host="${e.name}" data-type="remote" oninput="saveManualIF(this)">${e.remote}</div></td>
-      <td>${makeTypeSelect(e.name, e.type, delBtn)}</td>`;
+      <td>${e.isManual ? `<div contenteditable="true" class="editable-cell" data-host="${e.name}" data-type="remote" oninput="saveManualIF(this)">${e.remote}</div>` : makeUplinkBadge(e.remote)}</td>
+      <td>${e.isManual ? makeTypeSelect(e.name, e.type, delBtn) : makeCableTypeBadge(e.type) + delBtn}</td>`;
     mT.appendChild(tr);
   });
 
@@ -1835,9 +1873,9 @@ detectedHubs.forEach(hub => {
 
   /* ---- 手動接続エッジ ---- */
   cachedActiveHosts.forEach(hName => {
-    const dst = (ls(`m-if-remote-${hName}`) || '').trim();
+    const dst = (getHostUplink(hName) || '').trim();
     if (!dst || !labelToId[hName] || !labelToId[dst]) return;
-    const t = ls(`m-if-type-${hName}`) || 'cat6';
+    const t = getHostCableType(hName);
     const edge = { from: labelToId[hName], to: labelToId[dst], width: 2.5 };
     if (t === 'cat6')       edge.color = { color: '#2e7d32' };
     else if (t === 'cat5e') edge.color = { color: '#e65100' };
