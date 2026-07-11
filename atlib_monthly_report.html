@@ -766,6 +766,18 @@ let visNetworkInstance   = null;
 let globalAllH           = [];   // ホストキャッシュ（トラフィック用）
 let globalItems          = [];   // アイテムキャッシュ（トラフィック用）
 let trafficChartInstance = null;
+let globalHostRoleByName = {};   // 実機の役割（Zabbixホストタグ tag="role" 由来。顧客ポータルが書き込み元）
+
+/* 機器の役割を取得する。実機（Zabbixホスト）はタグ由来、手動追加機器（監視外）は
+   従来どおりlocalStorageから読む（顧客ポータルにはZabbixホストが存在しないため紐付けようがない）。
+   役割の編集は顧客ポータル（msp-customer-portal/public/topology.html）で行う運用に統一したため、
+   このツールでは実機の役割は表示のみで編集UIを持たない。 */
+function getHostRole(name) {
+  if (Object.prototype.hasOwnProperty.call(globalHostRoleByName, name)) {
+    return globalHostRoleByName[name];
+  }
+  return ls(`m-if-role-${name}`) || 'other';
+}
 
 /* ---- インターフェース一覧 並べ替え状態 ---- */
 let ifSortMode      = localStorage.getItem('atlib_if_sort_mode') || 'hierarchy'; // 'hierarchy' | 'manual'
@@ -926,6 +938,12 @@ async function refreshReportData() {
       selectTags: 'extend',
       selectTriggers: ['description','value']
     }, 31);
+
+    globalHostRoleByName = {};
+    allH.forEach(h => {
+      const roleTag = (h.tags || []).find(t => t.tag === 'role');
+      if (roleTag) globalHostRoleByName[h.name] = roleTag.value;
+    });
 
     const hIds = allH.map(h => h.hostid);
     const items = hIds.length > 0 ? await zbxCall('item.get', {
@@ -1296,7 +1314,7 @@ async function _detectUnmanagedHubs(hIds, items, allH) {
 
     /* ── 除外①: AP役割のホスト ──
        APは複数の無線クライアントMACを集約するため誤検知になる */
-    const hostRole = ls(`m-if-role-${hostName}`) || 'other';
+    const hostRole = getHostRole(hostName);
     if (hostRole === 'ap') {
       console.log(`[バカハブ検出] ${hostName}: AP役割のためスキップ`);
       return;
@@ -1579,12 +1597,19 @@ function _renderInterfaceTable(allH, manualHosts) {
   mT.innerHTML = '';
   _updateIfSortToggleUI();
 
+  const ROLE_LABELS_JA = {
+    router: 'ルーター/コア', switch: 'L2/L3スイッチ',
+    ap: 'AP', printer: 'プリンター', other: 'その他'
+  };
   function makeRoleSelect(hName, cur) {
-    const opts = [
-      ['router','ルーター/コア'],['switch','L2/L3スイッチ'],
-      ['ap','AP'],['printer','プリンター'],['other','その他']
-    ].map(([v,t]) => `<option value="${v}"${cur===v?' selected':''}>${t}</option>`).join('');
+    const opts = Object.entries(ROLE_LABELS_JA)
+      .map(([v,t]) => `<option value="${v}"${cur===v?' selected':''}>${t}</option>`).join('');
     return `<select data-host="${hName}" data-type="role" onchange="saveManualSelect(this)" style="width:100%;font-size:11px;padding:4px;border:1px solid #b0bec5;border-radius:4px;">${opts}</select>`;
+  }
+  /* 実機（Zabbixホスト）の役割は顧客ポータルで設定する運用のため、ここでは表示のみ（編集不可）。 */
+  function makeRoleBadge(cur) {
+    const label = ROLE_LABELS_JA[cur] || cur;
+    return `<span style="font-size:11px;color:#546e7a;" title="役割は顧客ポータルで設定してください">${label} 🔒</span>`;
   }
   function makeTypeSelect(hName, cur, extra='') {
     const opts = [
@@ -1597,7 +1622,7 @@ function _renderInterfaceTable(allH, manualHosts) {
   allH.forEach(h => {
     entries.push({
       name: h.name, isManual: false,
-      role:   ls(`m-if-role-${h.name}`)   || 'other',
+      role:   getHostRole(h.name),
       port:   ls(`m-if-port-${h.name}`)   || '',
       remote: ls(`m-if-remote-${h.name}`) || '',
       type:   ls(`m-if-type-${h.name}`)   || 'cat6'
@@ -1606,7 +1631,7 @@ function _renderInterfaceTable(allH, manualHosts) {
   manualHosts.forEach((hName, idx) => {
     entries.push({
       name: hName, isManual: true, idx,
-      role:   ls(`m-if-role-${hName}`)   || 'other',
+      role:   getHostRole(hName),
       port:   ls(`m-if-port-${hName}`)   || '',
       remote: ls(`m-if-remote-${hName}`) || '',
       type:   ls(`m-if-type-${hName}`)   || 'cat6'
@@ -1656,7 +1681,7 @@ function _renderInterfaceTable(allH, manualHosts) {
     }
     tr.innerHTML = `
       <td><div style="display:flex;align-items:center;gap:4px;">${handle}${prefix}${nameCell}</div></td>
-      <td>${makeRoleSelect(e.name, e.role)}</td>
+      <td>${e.isManual ? makeRoleSelect(e.name, e.role) : makeRoleBadge(e.role)}</td>
       <td><div contenteditable="true" class="editable-cell" data-host="${e.name}" data-type="port" oninput="saveManualIF(this)">${e.port}</div></td>
       <td><div contenteditable="true" class="editable-cell" data-host="${e.name}" data-type="remote" oninput="saveManualIF(this)">${e.remote}</div></td>
       <td>${makeTypeSelect(e.name, e.type, delBtn)}</td>`;
@@ -1691,7 +1716,7 @@ function _renderTopologyMap() {
 
   /* 監視対象ホスト */
   globalTopologyNodes.forEach(h => {
-    const role  = ls(`m-if-role-${h.name}`) || 'other';
+    const role  = getHostRole(h.name);
     const style = roleStyle[role] || roleStyle.other;
     nodes.push({
       id:    h.id,
@@ -1982,7 +2007,7 @@ function _populateWanSelector() {
   selOut.innerHTML = '<option value="">── OUT ──</option>';
 
   /* ルーター役割のホストを優先、未設定なら全ホスト */
-  const routerHosts = globalAllH.filter(h => (ls(`m-if-role-${h.name}`) || 'other') === 'router');
+  const routerHosts = globalAllH.filter(h => getHostRole(h.name) === 'router');
   const targetHosts = routerHosts.length > 0 ? routerHosts : globalAllH;
   const targetIds   = new Set(targetHosts.map(h => h.hostid));
   const hostItems   = globalItems.filter(i => targetIds.has(i.hostid));
