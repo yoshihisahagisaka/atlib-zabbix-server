@@ -251,7 +251,10 @@ def _create_discovery_rule(zabbix: ZabbixClient, name: str, ip_range: str, proxy
         "dchecks": dchecks,
     }
     if proxy_id:
-        params["proxy_hostid"] = proxy_id
+        # Zabbix 7.0でdruleオブジェクトのproxy_hostidはproxyidに変更された（公式APIリファレンスで確認済み）。
+        # 旧フィールド名のままだとAPIがエラーを返さず黙って無視するため、Proxyが設定されないまま
+        # Zabbixサーバーが直接ディスカバリを試み、顧客のプライベートネットワークに到達できなかった。
+        params["proxyid"] = proxy_id
 
     result = zabbix.call("drule.create", params)
     return result["druleids"][0]
