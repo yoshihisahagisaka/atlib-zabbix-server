@@ -1,0 +1,708 @@
+<title>atLIB InfraVision 運用手順書</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+@font-face {
+  font-family: 'JBMono';
+  src: url(data:font/woff2;base64,__FONT_B64__) format('woff2');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --bg: #F5F7FB;
+  --surface: #FFFFFF;
+  --ink: #1B2333;
+  --ink-soft: #3D4759;
+  --muted: #6B7690;
+  --border: #DDE2ED;
+  --border-strong: #C7CEDC;
+  --accent: #2453D6;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #E8EDFC;
+  --ok: #1C8F5E;
+  --ok-soft: #E4F5EC;
+  --warn: #B5790E;
+  --warn-soft: #FBF0DC;
+  --danger: #C43B4E;
+  --danger-soft: #FCE8EA;
+  --code-bg: #101728;
+  --code-ink: #D9E1F2;
+  --code-border: #232C42;
+  --shadow: 0 1px 2px rgba(20,28,46,.07), 0 10px 28px rgba(20,28,46,.08);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0A1120;
+    --surface: #121B2E;
+    --ink: #E7EBF6;
+    --ink-soft: #C2CAE0;
+    --muted: #8B96B4;
+    --border: #232D46;
+    --border-strong: #303C5C;
+    --accent: #7B9DFF;
+    --accent-ink: #0A1120;
+    --accent-soft: #1B2A4D;
+    --ok: #4CC490;
+    --ok-soft: #123726;
+    --warn: #E3A63D;
+    --warn-soft: #3A2C10;
+    --danger: #F0899A;
+    --danger-soft: #3A1620;
+    --code-bg: #0A0F1D;
+    --code-ink: #D9E1F2;
+    --code-border: #1E2740;
+    --shadow: 0 1px 2px rgba(0,0,0,.35), 0 10px 28px rgba(0,0,0,.45);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0A1120;
+  --surface: #121B2E;
+  --ink: #E7EBF6;
+  --ink-soft: #C2CAE0;
+  --muted: #8B96B4;
+  --border: #232D46;
+  --border-strong: #303C5C;
+  --accent: #7B9DFF;
+  --accent-ink: #0A1120;
+  --accent-soft: #1B2A4D;
+  --ok: #4CC490;
+  --ok-soft: #123726;
+  --warn: #E3A63D;
+  --warn-soft: #3A2C10;
+  --danger: #F0899A;
+  --danger-soft: #3A1620;
+  --code-bg: #0A0F1D;
+  --code-ink: #D9E1F2;
+  --code-border: #1E2740;
+  --shadow: 0 1px 2px rgba(0,0,0,.35), 0 10px 28px rgba(0,0,0,.45);
+}
+:root[data-theme="light"] {
+  --bg: #F5F7FB;
+  --surface: #FFFFFF;
+  --ink: #1B2333;
+  --ink-soft: #3D4759;
+  --muted: #6B7690;
+  --border: #DDE2ED;
+  --border-strong: #C7CEDC;
+  --accent: #2453D6;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #E8EDFC;
+  --ok: #1C8F5E;
+  --ok-soft: #E4F5EC;
+  --warn: #B5790E;
+  --warn-soft: #FBF0DC;
+  --danger: #C43B4E;
+  --danger-soft: #FCE8EA;
+  --code-bg: #101728;
+  --code-ink: #D9E1F2;
+  --code-border: #232C42;
+  --shadow: 0 1px 2px rgba(20,28,46,.07), 0 10px 28px rgba(20,28,46,.08);
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "游ゴシック体", "Yu Gothic Medium", "Yu Gothic", "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+  font-size: 15px;
+  line-height: 1.85;
+  -webkit-font-smoothing: antialiased;
+}
+@media (prefers-reduced-motion: reduce) {
+  * { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
+}
+
+.app {
+  display: grid;
+  grid-template-columns: 272px minmax(0, 1fr);
+  min-height: 100vh;
+}
+@media (max-width: 860px) {
+  .app { grid-template-columns: 1fr; }
+  .sidebar { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+}
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  padding: 22px 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.brand {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.brand .mark {
+  font-family: 'JBMono', ui-monospace, monospace;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: .08em;
+  color: var(--accent);
+}
+.brand h1 {
+  margin: 2px 0 0;
+  font-size: 16.5px;
+  font-weight: 700;
+  color: var(--ink);
+  text-wrap: balance;
+}
+.brand .sub {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.navlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.nav-group-label {
+  font-family: 'JBMono', ui-monospace, monospace;
+  font-size: 10.5px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 14px 10px 4px;
+}
+.nav-group-label:first-child { padding-top: 2px; }
+.navlist a {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  padding: 9px 10px;
+  border-radius: 7px;
+  color: var(--ink-soft);
+  text-decoration: none;
+  font-size: 13.4px;
+  line-height: 1.4;
+  border-left: 2px solid transparent;
+}
+.navlist a .tag {
+  font-family: 'JBMono', ui-monospace, monospace;
+  font-size: 10.5px;
+  color: var(--muted);
+  flex-shrink: 0;
+  padding-top: 1px;
+}
+.navlist a:hover { background: var(--accent-soft); color: var(--ink); }
+.navlist a.active { background: var(--accent-soft); color: var(--accent); border-left-color: var(--accent); font-weight: 700; }
+.navlist a.active .tag { color: var(--accent); }
+
+.sidebar-foot {
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.theme-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  align-self: flex-start;
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  color: var(--ink-soft);
+  border-radius: 7px;
+  padding: 7px 11px;
+  font-size: 12.5px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.theme-btn:hover { border-color: var(--accent); color: var(--accent); }
+.theme-btn:focus-visible, a:focus-visible, button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.gen-note { font-size: 11px; color: var(--muted); line-height: 1.6; }
+
+.main { min-width: 0; padding: 40px clamp(20px, 4vw, 64px) 120px; }
+.doc {
+  max-width: 760px;
+  margin: 0 auto 96px;
+  scroll-margin-top: 24px;
+}
+.doc:first-child { margin-top: 4px; }
+.doc-head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 20px;
+  margin-bottom: 30px;
+  border-bottom: 2px solid var(--border-strong);
+}
+.doc-head .eyebrow {
+  font-family: 'JBMono', ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: .10em;
+  color: var(--accent);
+  text-transform: uppercase;
+}
+.doc-head h2 { margin: 0; font-size: 25px; font-weight: 700; text-wrap: balance; }
+.doc-meta { font-size: 12.5px; color: var(--muted); display: flex; gap: 14px; flex-wrap: wrap; }
+.doc-meta code { background: none; padding: 0; }
+
+.doc h3 { font-size: 18.5px; margin: 40px 0 12px; font-weight: 700; scroll-margin-top: 24px; }
+.doc h4 { font-size: 15.5px; margin: 26px 0 8px; font-weight: 700; color: var(--ink-soft); scroll-margin-top: 24px; }
+.doc h5 { font-size: 13.5px; margin: 20px 0 6px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; scroll-margin-top: 24px; }
+.doc p { margin: 0 0 14px; max-width: 66ch; }
+.doc ul, .doc ol { margin: 0 0 14px; padding-left: 1.4em; max-width: 66ch; }
+.doc li { margin: 0 0 6px; }
+.doc li > ul, .doc li > ol { margin-top: 6px; }
+.doc strong { font-weight: 700; color: var(--ink); }
+.doc hr { border: none; border-top: 1px solid var(--border); margin: 34px 0; }
+
+.doc code {
+  font-family: 'JBMono', ui-monospace, SFMono-Regular, monospace;
+  font-size: .87em;
+  background: var(--accent-soft);
+  color: var(--accent);
+  padding: .12em .4em;
+  border-radius: 4px;
+  word-break: break-word;
+}
+.doc pre {
+  margin: 0 0 16px;
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
+  border-radius: 10px;
+  overflow-x: auto;
+  box-shadow: var(--shadow);
+}
+.doc pre code {
+  display: block;
+  background: none;
+  color: var(--code-ink);
+  padding: 15px 18px;
+  border-radius: 0;
+  font-size: 12.8px;
+  line-height: 1.7;
+  white-space: pre;
+  font-variant-numeric: tabular-nums;
+}
+.doc pre .lang {
+  display: block;
+  font-family: 'JBMono', ui-monospace, monospace;
+  font-size: 10.5px;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 9px 18px 0;
+  background: none;
+}
+
+.doc blockquote {
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  background: var(--warn-soft);
+  border-left: 3px solid var(--warn);
+  border-radius: 0 8px 8px 0;
+  color: var(--ink-soft);
+  max-width: 66ch;
+}
+.doc blockquote p:last-child { margin-bottom: 0; }
+.doc blockquote code { background: rgba(0,0,0,.06); }
+
+.table-wrap { overflow-x: auto; margin: 0 0 18px; border: 1px solid var(--border); border-radius: 10px; }
+.doc table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.doc th, .doc td { text-align: left; padding: 9px 13px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.doc thead th {
+  background: var(--accent-soft);
+  color: var(--ink-soft);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  font-weight: 700;
+  border-bottom: 1px solid var(--border-strong);
+}
+.doc tbody tr:last-child td { border-bottom: none; }
+.doc tbody tr:hover { background: var(--accent-soft); }
+
+a.xref, .doc a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+}
+.doc a:hover { border-bottom-color: var(--accent); }
+a.xref::after { content: " →"; font-size: .85em; opacity: .7; }
+a.xref-missing { color: var(--muted); border-bottom-style: dashed; cursor: default; }
+a.xref-missing::after { content: ""; }
+
+::selection { background: var(--accent-soft); color: var(--ink); }
+
+@media print {
+  .sidebar { display: none; }
+  .app { display: block; }
+}
+</style>
+
+<div class="app">
+  <nav class="sidebar" aria-label="手順書一覧">
+    <div class="brand">
+      <span class="mark">atLIB / InfraVision</span>
+      <h1>運用手順書</h1>
+      <span class="sub">Sensor Edge・顧客ポータル・Zabbixサーバー運用まとめ</span>
+    </div>
+    <ul class="navlist" id="navlist"></ul>
+    <div class="sidebar-foot">
+      <button class="theme-btn" id="themeToggle" type="button" aria-label="配色を切り替え">
+        <span id="themeIcon">◐</span><span id="themeLabel">配色を切替</span>
+      </button>
+      <p class="gen-note">上段「操作ガイド」は非技術者向けの実施手順、下段「運用仕様書」は詳細な技術背景です。文中の水色リンクをクリックすると該当箇所へ移動します。生成日: __GEN_DATE__</p>
+    </div>
+  </nav>
+  <main class="main" id="main"></main>
+</div>
+
+<script type="text/plain" id="src-guide-sensor-edge">__GUIDE_SENSOR_EDGE__</script>
+<script type="text/plain" id="src-guide-onboarding">__GUIDE_ONBOARDING__</script>
+<script type="text/plain" id="src-guide-deploy">__GUIDE_DEPLOY__</script>
+<script type="text/plain" id="src-guide-pw-admin">__GUIDE_PW_ADMIN__</script>
+<script type="text/plain" id="src-guide-pw-db">__GUIDE_PW_DB__</script>
+<script type="text/plain" id="src-guide-psk-proxy">__GUIDE_PSK_PROXY__</script>
+<script type="text/plain" id="src-guide-backup-dr">__GUIDE_BACKUP_DR__</script>
+<script type="text/plain" id="src-sensor-edge">__DOC_SENSOR_EDGE__</script>
+<script type="text/plain" id="src-onboarding">__DOC_ONBOARDING__</script>
+<script type="text/plain" id="src-deploy">__DOC_DEPLOY__</script>
+<script type="text/plain" id="src-pw-admin">__DOC_PW_ADMIN__</script>
+<script type="text/plain" id="src-pw-db">__DOC_PW_DB__</script>
+<script type="text/plain" id="src-psk-proxy">__DOC_PSK_PROXY__</script>
+<script type="text/plain" id="src-backup-dr">__DOC_BACKUP_DR__</script>
+
+<script>
+(function () {
+  "use strict";
+
+  var GROUP_LABEL = { guide: "操作ガイド（かんたん版）", spec: "運用仕様書（詳細）" };
+  var DOCS = [
+    { slug: "guide-sensor-edge", group: "guide", tag: "01", title: "Sensor Edge 構築・顧客追加" },
+    { slug: "guide-onboarding",  group: "guide", tag: "02", title: "顧客オンボーディング統合フロー" },
+    { slug: "guide-deploy",      group: "guide", tag: "03", title: "zabbixserver デプロイ" },
+    { slug: "guide-pw-admin",    group: "guide", tag: "04", title: "Zabbix管理者パスワード ローテーション" },
+    { slug: "guide-pw-db",       group: "guide", tag: "05", title: "zabbix-server DBパスワード ローテーション" },
+    { slug: "guide-psk-proxy",   group: "guide", tag: "06", title: "Zabbix Proxy PSK ローテーション" },
+    { slug: "guide-backup-dr",   group: "guide", tag: "07", title: "バックアップ・DR方針 定期確認" },
+    { slug: "sensor-edge", group: "spec", tag: "01", title: "Sensor Edge 構築・顧客追加" },
+    { slug: "onboarding",  group: "spec", tag: "02", title: "顧客オンボーディング統合フロー" },
+    { slug: "deploy",      group: "spec", tag: "03", title: "zabbixserver デプロイ" },
+    { slug: "pw-admin",    group: "spec", tag: "04", title: "Zabbix管理者パスワード ローテーション" },
+    { slug: "pw-db",       group: "spec", tag: "05", title: "zabbix-server DBパスワード ローテーション" },
+    { slug: "psk-proxy",   group: "spec", tag: "06", title: "Zabbix Proxy PSK ローテーション" },
+    { slug: "backup-dr",   group: "spec", tag: "07", title: "バックアップ・DR方針" }
+  ];
+  var FILENAME_TO_SLUG = {
+    "運用手順書_顧客追加フロー.md": "sensor-edge",
+    "実施手順_顧客追加フロー.md": "guide-sensor-edge",
+    "運用手順書_顧客オンボーディング統合フロー.md": "onboarding",
+    "実施手順_顧客オンボーディング統合フロー.md": "guide-onboarding",
+    "運用手順書_デプロイ.md": "deploy",
+    "実施手順_デプロイ.md": "guide-deploy",
+    "運用手順書_Zabbix管理者パスワードローテーション.md": "pw-admin",
+    "実施手順_Zabbix管理者パスワードローテーション.md": "guide-pw-admin",
+    "運用手順書_zabbix-server_DBパスワードローテーション.md": "pw-db",
+    "実施手順_zabbix-server_DBパスワードローテーション.md": "guide-pw-db",
+    "運用手順書_ZabbixProxy_PSKローテーション.md": "psk-proxy",
+    "実施手順_ZabbixProxy_PSKローテーション.md": "guide-psk-proxy",
+    "運用手順書_バックアップDR方針.md": "backup-dr",
+    "実施手順_バックアップDR方針.md": "guide-backup-dr"
+  };
+
+  function esc(s) {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  // ---- inline markdown: code spans, bold, links (incl. xref: scheme) ----
+  function inline(text, headings) {
+    var out = esc(text);
+
+    // links: [label](url)
+    out = out.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function (m, label, url) {
+      if (url.indexOf("xref:") === 0) {
+        var rest = url.slice(5);
+        var hashIdx = rest.indexOf("#");
+        var slug = hashIdx >= 0 ? rest.slice(0, hashIdx) : rest;
+        var headingText = hashIdx >= 0 ? decodeURIComponent(rest.slice(hashIdx + 1)) : null;
+        return xrefAnchor(slug, headingText, label, headings);
+      }
+      // relative .md path: try to resolve to a known doc by basename
+      var base = url.split("/").pop();
+      if (FILENAME_TO_SLUG[base]) {
+        return xrefAnchor(FILENAME_TO_SLUG[base], null, label, headings);
+      }
+      if (/^https?:\/\//.test(url)) {
+        return '<a href="' + url + '" target="_blank" rel="noopener">' + label + "</a>";
+      }
+      // unresolvable relative link (e.g. msp_frontend_design.md, not included) -> inert text
+      return '<span class="xref-missing" title="このページには含まれていません">' + label + "</span>";
+    });
+
+    // bare filename mentions not already inside a link/code -> auto xref (best effort)
+    Object.keys(FILENAME_TO_SLUG).forEach(function (fname) {
+      var slug = FILENAME_TO_SLUG[fname];
+      var re = new RegExp(fname.replace(/[.]/g, "\\."), "g");
+      out = out.replace(re, function (m, offset, str) {
+        var before = str.slice(0, offset);
+        var openA = before.lastIndexOf("<a");
+        var closeA = before.lastIndexOf("</a>");
+        if (openA > closeA) return m; // already inside a link
+        return xrefAnchor(slug, null, m, headings);
+      });
+    });
+
+    out = out.replace(/`([^`]+)`/g, "<code>$1</code>");
+    out = out.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    return out;
+  }
+
+  function xrefAnchor(slug, headingText, label, headings) {
+    var id = "doc-" + slug;
+    if (headingText && headings[slug] && headings[slug][headingText]) {
+      id = headings[slug][headingText];
+    }
+    return '<a class="xref" href="#' + id + '" data-xref="1">' + label + "</a>";
+  }
+
+  // ---- block-level markdown parser ----
+  function parseDoc(raw, slug, headings) {
+    var lines = raw.replace(/\r\n/g, "\n").split("\n");
+    var html = [];
+    var i = 0;
+    headings[slug] = headings[slug] || {};
+    var hCounter = 0;
+
+    function slugId() { hCounter++; return "doc-" + slug + "-h" + hCounter; }
+
+    while (i < lines.length) {
+      var line = lines[i];
+
+      if (/^\s*$/.test(line)) { i++; continue; }
+
+      // fenced code block
+      var fence = line.match(/^```(\S*)\s*$/);
+      if (fence) {
+        var lang = fence[1] || "";
+        var buf = [];
+        i++;
+        while (i < lines.length && !/^```\s*$/.test(lines[i])) { buf.push(lines[i]); i++; }
+        i++; // skip closing fence
+        html.push('<pre>' + (lang ? '<span class="lang">' + esc(lang) + "</span>" : "") +
+          "<code>" + esc(buf.join("\n")) + "</code></pre>");
+        continue;
+      }
+
+      // heading
+      var h = line.match(/^(#{1,5})\s+(.*)$/);
+      if (h) {
+        var level = h[1].length;
+        var text = h[2].trim();
+        var tag = level === 1 ? "h3" : level === 2 ? "h3" : level === 3 ? "h4" : "h5";
+        var id = slugId();
+        headings[slug][text] = id;
+        html.push("<" + tag + ' id="' + id + '">' + inline(text, headings) + "</" + tag + ">");
+        i++;
+        continue;
+      }
+
+      // horizontal rule
+      if (/^-{3,}\s*$/.test(line)) { html.push("<hr>"); i++; continue; }
+
+      // table
+      if (/^\|/.test(line) && i + 1 < lines.length && /^\|?\s*:?-{2,}/.test(lines[i + 1])) {
+        var headerCells = line.replace(/^\||\|$/g, "").split("|").map(function (c) { return c.trim(); });
+        i += 2;
+        var rows = [];
+        while (i < lines.length && /^\|/.test(lines[i])) {
+          rows.push(lines[i].replace(/^\||\|$/g, "").split("|").map(function (c) { return c.trim(); }));
+          i++;
+        }
+        var t = ['<div class="table-wrap"><table><thead><tr>'];
+        headerCells.forEach(function (c) { t.push("<th>" + inline(c, headings) + "</th>"); });
+        t.push("</tr></thead><tbody>");
+        rows.forEach(function (r) {
+          t.push("<tr>");
+          r.forEach(function (c) { t.push("<td>" + inline(c, headings) + "</td>"); });
+          t.push("</tr>");
+        });
+        t.push("</tbody></table></div>");
+        html.push(t.join(""));
+        continue;
+      }
+
+      // blockquote
+      if (/^>\s?/.test(line)) {
+        var qbuf = [];
+        while (i < lines.length && /^>\s?/.test(lines[i])) {
+          qbuf.push(lines[i].replace(/^>\s?/, ""));
+          i++;
+        }
+        html.push("<blockquote>" + renderParagraphish(qbuf, headings) + "</blockquote>");
+        continue;
+      }
+
+      // numbered list
+      if (/^\s*\d+\.\s+/.test(line)) {
+        var olItems = [];
+        while (i < lines.length && /^\s*\d+\.\s+/.test(lines[i])) {
+          var itemLines = [lines[i].replace(/^\s*\d+\.\s+/, "")];
+          i++;
+          while (i < lines.length && /^\s{3,}\S/.test(lines[i]) && !/^\s*[-\d]/.test(lines[i].trim())) {
+            itemLines.push(lines[i].trim());
+            i++;
+          }
+          // nested bullet list under a numbered item
+          var nested = "";
+          if (i < lines.length && /^\s{3,}-\s+/.test(lines[i])) {
+            var nb = [];
+            while (i < lines.length && /^\s{3,}-\s+/.test(lines[i])) {
+              nb.push(lines[i].replace(/^\s{3,}-\s+/, ""));
+              i++;
+            }
+            nested = "<ul>" + nb.map(function (b) { return "<li>" + inline(b, headings) + "</li>"; }).join("") + "</ul>";
+          }
+          olItems.push("<li>" + inline(itemLines.join(" "), headings) + nested + "</li>");
+        }
+        html.push("<ol>" + olItems.join("") + "</ol>");
+        continue;
+      }
+
+      // bullet list
+      if (/^\s*-\s+/.test(line)) {
+        var ulItems = [];
+        while (i < lines.length && /^\s*-\s+/.test(lines[i])) {
+          var uiLines = [lines[i].replace(/^\s*-\s+/, "")];
+          i++;
+          while (i < lines.length && /^\s{2,}\S/.test(lines[i]) && !/^\s*-\s+/.test(lines[i])) {
+            uiLines.push(lines[i].trim());
+            i++;
+          }
+          var nested2 = "";
+          if (i < lines.length && /^\s{2,}-\s+/.test(lines[i])) {
+            var nb2 = [];
+            while (i < lines.length && /^\s{2,}-\s+/.test(lines[i])) {
+              nb2.push(lines[i].replace(/^\s{2,}-\s+/, ""));
+              i++;
+            }
+            nested2 = "<ul>" + nb2.map(function (b) { return "<li>" + inline(b, headings) + "</li>"; }).join("") + "</ul>";
+          }
+          ulItems.push("<li>" + inline(uiLines.join(" "), headings) + nested2 + "</li>");
+        }
+        html.push("<ul>" + ulItems.join("") + "</ul>");
+        continue;
+      }
+
+      // paragraph (accumulate until blank line)
+      var pbuf = [];
+      while (i < lines.length && !/^\s*$/.test(lines[i]) &&
+             !/^#{1,5}\s/.test(lines[i]) && !/^```/.test(lines[i]) &&
+             !/^-{3,}\s*$/.test(lines[i]) && !/^\|/.test(lines[i]) &&
+             !/^>\s?/.test(lines[i]) && !/^\s*-\s+/.test(lines[i]) && !/^\s*\d+\.\s+/.test(lines[i])) {
+        pbuf.push(lines[i]);
+        i++;
+      }
+      html.push("<p>" + inline(pbuf.join(" "), headings) + "</p>");
+    }
+    return html.join("\n");
+  }
+
+  function renderParagraphish(lines, headings) {
+    return lines.filter(function (l) { return l.trim() !== ""; })
+      .map(function (l) { return "<p>" + inline(l, headings) + "</p>"; }).join("");
+  }
+
+  // ---- boot ----
+  var headings = {};
+  var rendered = {};
+  DOCS.forEach(function (d) {
+    var raw = document.getElementById("src-" + d.slug).textContent;
+    rendered[d.slug] = parseDoc(raw, d.slug, headings);
+  });
+
+  var nav = document.getElementById("navlist");
+  var main = document.getElementById("main");
+  var lastGroup = null;
+
+  DOCS.forEach(function (d) {
+    if (d.group !== lastGroup) {
+      var label = document.createElement("li");
+      label.className = "nav-group-label";
+      label.textContent = GROUP_LABEL[d.group];
+      nav.appendChild(label);
+      lastGroup = d.group;
+    }
+
+    var li = document.createElement("li");
+    var a = document.createElement("a");
+    a.href = "#doc-" + d.slug;
+    a.innerHTML = '<span class="tag">' + d.tag + "</span><span>" + d.title + "</span>";
+    a.dataset.slug = d.slug;
+    li.appendChild(a);
+    nav.appendChild(li);
+
+    var section = document.createElement("section");
+    section.className = "doc";
+    section.id = "doc-" + d.slug;
+    var eyebrow = (d.group === "guide" ? "操作ガイド " : "運用仕様書 ") + d.tag;
+    section.innerHTML =
+      '<header class="doc-head"><span class="eyebrow">' + eyebrow + "</span><h2>" + d.title + "</h2></header>" +
+      rendered[d.slug];
+    main.appendChild(section);
+  });
+
+  // smooth scroll for in-page anchors (xref + nav)
+  document.addEventListener("click", function (e) {
+    var a = e.target.closest('a[href^="#"]');
+    if (!a) return;
+    var id = a.getAttribute("href").slice(1);
+    var target = document.getElementById(id);
+    if (!target) return;
+    e.preventDefault();
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+    history.replaceState(null, "", "#" + id);
+  });
+
+  // active section highlighting
+  var navLinks = Array.prototype.slice.call(nav.querySelectorAll("a"));
+  var sections = DOCS.map(function (d) { return document.getElementById("doc-" + d.slug); });
+  function setActive(slug) {
+    navLinks.forEach(function (a) { a.classList.toggle("active", a.dataset.slug === slug); });
+  }
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting) setActive(entry.target.id.replace("doc-", ""));
+    });
+  }, { rootMargin: "-10% 0px -70% 0px", threshold: 0 });
+  sections.forEach(function (s) { io.observe(s); });
+  setActive(DOCS[0].slug);
+
+  // theme toggle
+  var root = document.documentElement;
+  var btn = document.getElementById("themeToggle");
+  var icon = document.getElementById("themeIcon");
+  var label = document.getElementById("themeLabel");
+  function applyTheme(t) {
+    if (t) { root.setAttribute("data-theme", t); } else { root.removeAttribute("data-theme"); }
+    var isDark = t === "dark" || (!t && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    icon.textContent = isDark ? "☀" : "☾";
+    label.textContent = isDark ? "ライトに切替" : "ダークに切替";
+  }
+  var saved = null;
+  try { saved = localStorage.getItem("ops-theme"); } catch (e) {}
+  applyTheme(saved);
+  btn.addEventListener("click", function () {
+    var current = root.getAttribute("data-theme") ||
+      (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    var next = current === "dark" ? "light" : "dark";
+    applyTheme(next);
+    try { localStorage.setItem("ops-theme", next); } catch (e) {}
+  });
+})();
+</script>
