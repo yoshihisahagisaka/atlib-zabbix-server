@@ -2367,10 +2367,12 @@ gcloud compute resource-policies describe default-schedule-1 --region=asia-north
 
 上記バックアップとは別に、`msp-customer-portal`および`topology.zabbix.atlib.jp`が実際にダウンしたことに気づく仕組みが無かったため、2026-07-12にGCP Cloud Monitoringの**Uptime Check**を新設した。
 
-- 監視対象: `https://msp-customer-portal-135863453696.asia-northeast1.run.app/healthz`、`https://topology.zabbix.atlib.jp/healthz`
+- 監視対象: `https://msp-customer-portal-135863453696.asia-northeast1.run.app/healthz/`、`https://topology.zabbix.atlib.jp/healthz`
 - チェック間隔: 5分
 - 通知先: メール通知チャネル「atLIB Ops Alert (Yoshihisa)」（`yoshihisa.hagisaka@atlib.jp`）
 - アラートポリシー: `Portal and Topology Uptime Failure`（いずれかのチェックが失敗したら通知）
+
+> **既知の誤検知（2026-07-11発生・解消済み）**: `msp-customer-portal`（Cloud Run）側で「Uptime Monitoring fired」のアラートが発報したが、実際にはアプリは正常稼働していた。原因はCloud Runのプラットフォーム層が、末尾スラッシュなしの完全一致パス`/healthz`へのGETリクエストをアプリに届く前に横取りし、独自の404を返す挙動（`/healthz/`とスラッシュを付ける、または他のパス名にすると発生しない）。`msp-customer-portal healthz`のUptime Check設定の`httpCheck.path`を`/healthz`→`/healthz/`に変更して解消した（`topology.zabbix.atlib.jp`側はnginx配信のため対象外・問題なし）。同種のアラートが再発した場合は、まずアプリ自体が生きているか（`/`や`/login.html`等の別パスで確認）を先に疑うこと。
 
 確認コマンド:
 ```bash
