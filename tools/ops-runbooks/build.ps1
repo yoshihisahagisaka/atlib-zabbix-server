@@ -22,6 +22,8 @@ $docs = @{
   "__GUIDE_PW_DB__"       = "$repo\msp-frontend-server\実施手順_zabbix-server_DBパスワードローテーション.md"
   "__GUIDE_PSK_PROXY__"   = "$repo\msp-frontend-server\実施手順_ZabbixProxy_PSKローテーション.md"
   "__GUIDE_BACKUP_DR__"   = "$repo\msp-frontend-server\実施手順_バックアップDR方針.md"
+  "__DOC_DEVICE_MGMT__"   = "$repo\Sensor Edge\運用手順書_機器管理システム.md"
+  "__GUIDE_DEVICE_MGMT__" = "$repo\Sensor Edge\実施手順_機器管理システム.md"
 }
 
 $out = $template.Replace("__FONT_B64__", $fontB64)

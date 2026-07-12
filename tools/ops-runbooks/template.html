@@ -370,6 +370,7 @@ a.xref-missing::after { content: ""; }
 <script type="text/plain" id="src-guide-pw-db">__GUIDE_PW_DB__</script>
 <script type="text/plain" id="src-guide-psk-proxy">__GUIDE_PSK_PROXY__</script>
 <script type="text/plain" id="src-guide-backup-dr">__GUIDE_BACKUP_DR__</script>
+<script type="text/plain" id="src-guide-device-mgmt">__GUIDE_DEVICE_MGMT__</script>
 <script type="text/plain" id="src-sensor-edge">__DOC_SENSOR_EDGE__</script>
 <script type="text/plain" id="src-onboarding">__DOC_ONBOARDING__</script>
 <script type="text/plain" id="src-deploy">__DOC_DEPLOY__</script>
@@ -377,6 +378,7 @@ a.xref-missing::after { content: ""; }
 <script type="text/plain" id="src-pw-db">__DOC_PW_DB__</script>
 <script type="text/plain" id="src-psk-proxy">__DOC_PSK_PROXY__</script>
 <script type="text/plain" id="src-backup-dr">__DOC_BACKUP_DR__</script>
+<script type="text/plain" id="src-device-mgmt">__DOC_DEVICE_MGMT__</script>
 
 <script>
 (function () {
@@ -391,13 +393,15 @@ a.xref-missing::after { content: ""; }
     { slug: "guide-pw-db",       group: "guide", tag: "05", title: "zabbix-server DBパスワード ローテーション" },
     { slug: "guide-psk-proxy",   group: "guide", tag: "06", title: "Zabbix Proxy PSK ローテーション" },
     { slug: "guide-backup-dr",   group: "guide", tag: "07", title: "バックアップ・DR方針 定期確認" },
+    { slug: "guide-device-mgmt", group: "guide", tag: "08", title: "機器管理・故障履歴・問い合わせ管理" },
     { slug: "sensor-edge", group: "spec", tag: "01", title: "Sensor Edge 構築・顧客追加" },
     { slug: "onboarding",  group: "spec", tag: "02", title: "顧客オンボーディング統合フロー" },
     { slug: "deploy",      group: "spec", tag: "03", title: "zabbixserver デプロイ" },
     { slug: "pw-admin",    group: "spec", tag: "04", title: "Zabbix管理者パスワード ローテーション" },
     { slug: "pw-db",       group: "spec", tag: "05", title: "zabbix-server DBパスワード ローテーション" },
     { slug: "psk-proxy",   group: "spec", tag: "06", title: "Zabbix Proxy PSK ローテーション" },
-    { slug: "backup-dr",   group: "spec", tag: "07", title: "バックアップ・DR方針" }
+    { slug: "backup-dr",   group: "spec", tag: "07", title: "バックアップ・DR方針" },
+    { slug: "device-mgmt", group: "spec", tag: "08", title: "機器管理・故障履歴・問い合わせ管理" }
   ];
   var FILENAME_TO_SLUG = {
     "運用手順書_顧客追加フロー.md": "sensor-edge",
@@ -413,7 +417,9 @@ a.xref-missing::after { content: ""; }
     "運用手順書_ZabbixProxy_PSKローテーション.md": "psk-proxy",
     "実施手順_ZabbixProxy_PSKローテーション.md": "guide-psk-proxy",
     "運用手順書_バックアップDR方針.md": "backup-dr",
-    "実施手順_バックアップDR方針.md": "guide-backup-dr"
+    "実施手順_バックアップDR方針.md": "guide-backup-dr",
+    "運用手順書_機器管理システム.md": "device-mgmt",
+    "実施手順_機器管理システム.md": "guide-device-mgmt"
   };
 
   function esc(s) {
