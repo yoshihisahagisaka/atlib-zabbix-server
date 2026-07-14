@@ -24,6 +24,7 @@ $docs = @{
   "__GUIDE_BACKUP_DR__"   = "$repo\msp-frontend-server\実施手順_バックアップDR方針.md"
   "__DOC_DEVICE_MGMT__"   = "$repo\Sensor Edge\運用手順書_機器管理システム.md"
   "__GUIDE_DEVICE_MGMT__" = "$repo\Sensor Edge\実施手順_機器管理システム.md"
+  "__DOC_BASE_IMAGE__"    = "$repo\Sensor Edge\運用手順書_ベースイメージ作成.md"
 }
 
 $out = $template.Replace("__FONT_B64__", $fontB64)

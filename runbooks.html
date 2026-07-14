@@ -363,60 +363,57 @@ a.xref-missing::after { content: ""; }
       <button class="theme-btn" id="themeToggle" type="button" aria-label="配色を切り替え">
         <span id="themeIcon">◐</span><span id="themeLabel">配色を切替</span>
       </button>
-      <p class="gen-note">上段「操作ガイド」は非技術者向けの実施手順、下段「運用仕様書」は詳細な技術背景です。文中の水色リンクをクリックすると該当箇所へ移動します。生成日: 2026-07-12</p>
+      <p class="gen-note">上段「操作ガイド」は非技術者向けの実施手順、下段「運用仕様書」は詳細な技術背景です。文中の水色リンクをクリックすると該当箇所へ移動します。生成日: 2026-07-14</p>
     </div>
   </nav>
   <main class="main" id="main"></main>
 </div>
 
 <script type="text/plain" id="src-guide-sensor-edge">
-最終更新: 2026-07-12
+最終更新: 2026-07-13
 対応する詳細仕様書: `Sensor Edge/運用手順書_顧客追加フロー.md`（用語の意味や「なぜこうなっているか」はそちらを参照。本ページは「何をどう操作するか」だけに絞っている）
+ベースイメージの作り方: `Sensor Edge/運用手順書_ベースイメージ作成.md`
 機器登録フォームの使い方: `Sensor Edge/実施手順_機器管理システム.md`
 
 ## これは何の作業か
 
 新しい顧客が決まったら、顧客の拠点に置く小型の監視用機器（Sensor Edge、ラズパイ）を1台準備し、設定を入れて、発送するまでの一連の作業。
 
+2026-07-13より、あらかじめ用意した「ベースイメージ」をSDカードに複製するだけでOS・各種設定の大半が完了する方式に変わった（それ以前は台ごとに10ステップ近い手作業が必要だった）。
+
 ## 始める前に
 
-この作業には性質の異なる2種類のSSHアクセスが登場する。混同しないよう先に整理しておく。
+この作業には性質の異なる3種類のアクセスが登場する。混同しないよう先に整理しておく。
 
-| 何にSSHするか | 使う鍵・方法 | 使う手順 |
+| 何にアクセスするか | 使う鍵・方法 | 使う手順 |
 |---|---|---|
-| Sensor Edge本体（ラズパイ） | **atLIB共通の管理用SSH鍵ペア**。秘密鍵ファイルを自分の作業端末の`~/.ssh/`（Windowsは`$env:USERPROFILE\.ssh\`）にあらかじめコピーしておく（ファイルの入手先は担当エンジニアに確認） | 手順1・手順3・「うまくいかない場合」 |
+| Sensor Edge本体（ラズパイ、**自社内・同じLANにある間**） | **atLIB共通の管理用SSH鍵ペア**。秘密鍵ファイルを自分の作業端末の`~/.ssh/`（Windowsは`$env:USERPROFILE\.ssh\`）にあらかじめコピーしておく（ファイルの入手先は担当エンジニアに確認） | 手順1・手順3・「うまくいかない場合」 |
 | GCPの中継サーバー（`zabbix.atlib.jp`＝GCPインスタンス`zabbix-server`） | **gcloudコマンド**。自分のGoogleアカウントで`gcloud auth login`済みであれば、鍵の準備は不要（gcloudが自動で処理する） | 手順2・手順9・手順10 |
+| Sensor Edge本体（**発送後・顧客先に設置された状態**） | **Cloud IAPトンネル＋tinyproxy認証の2段階**。詳細は手順6 | 手順6・手順9・「うまくいかない場合」 |
 
 - 以下がそろっていること（無ければ担当エンジニアに確認）
-  - 上記2種類のアクセスがどちらも準備できていること
+  - 上記のアクセスがすべて準備できていること
   - Zabbix管理画面（`https://zabbix-admin.atlib.jp/`）にログインできるGoogleアカウント
   - 発送する新品のラズパイ本体（または使い回すSDカード）
+  - `Sensor Edge/運用手順書_ベースイメージ作成.md`で作成済みの最新のベースイメージ`.img`ファイル
 - 用意するメモ帳（作業中に出てくる値を一時的に控えるため。作業完了後は破棄する）
 
 ---
 
-## 手順1（任意）: 新品ラズパイに書き込む場合のみ
+## 手順1: ベースイメージをSDカードに複製する
 
-新品のラズパイを新たに用意する場合のみ実施する。既にセットアップ済みのSDカードを使い回す場合はこの手順は飛ばして手順2へ進む。
-
-1. **操作**: Raspberry Pi Imager（アプリ）を起動する
-2. **操作**: OSとして「Ubuntu Server 24.04 LTS (64-bit)」を選ぶ
-3. **操作**: 書き込み先のSD/eMMCを選ぶ
-4. **操作**: 歯車アイコン（詳細設定）を開き、以下を入力する
-   - ホスト名: 台ごとに違う名前（例: `atl-proxy-01`）
-   - ユーザー名・パスワード: 台ごとに違うランダムな文字列（同じものを使い回さない）
-   - SSH: 「公開鍵認証のみを許可」を選び、**atLIB共通の管理用SSH公開鍵**を登録する（技術者ごとに別々の鍵を用意する必要はない。鍵ファイルの場所が分からない場合は担当エンジニアに確認）
-   - Wi-Fi設定: 何も入力しない
-5. **操作**: 書き込みを実行する
-6. **操作**: 書き込み完了後、ホスト名・ユーザー名・生成したパスワードをメモ帳に控える（台帳への記録は手順8の機器登録フォームでまとめて行うため、ここでは一時メモでよい）
-7. **操作**: SDカードを本体に挿し、Ethernetケーブルで社内LANに接続して起動する
-8. **操作**: ラズパイのIPアドレスを確認する。ルーターの管理画面のDHCPクライアント一覧を開き、手順4で設定したホスト名（例: `atl-proxy-01`）を探す（ホスト名で見つからない場合、`ssh <ユーザー名>@<ホスト名>.local`のようにホスト名をそのまま使って接続できることもあるが、環境によっては使えないため、確実なのはルーターのDHCP一覧で調べる方法）
-9. **画面/コマンド**: 見つかったIPアドレスに向けて、以下のようにSSH接続する（`<atLIB共通の秘密鍵のパス>`は自分の端末にコピーした鍵ファイルのパス、`<ユーザー名>`と`<ラズパイのIPアドレス>`は手順4・上記で確認した値に置き換える）
+1. **操作**: Win32DiskImagerを起動する
+2. **操作**: 「Write」タブで、最新のベースイメージ`.img`ファイルを選ぶ
+3. **操作**: 新しいSDカードを書き込み先に選び、書き込みを実行する
+4. **操作**: SDカードを本体に挿し、Ethernetケーブルで社内LANに接続して起動する
+5. **操作**: ラズパイのIPアドレスを確認する（ルーターの管理画面のDHCPクライアント一覧から探す）
+6. **画面/コマンド**: 見つかったIPアドレスに向けて、以下のようにSSH接続する（**ベースイメージにatLIB共通の鍵が既に登録済みなので、鍵の再登録は不要**）
    ```bash
-   ssh -i "<atLIB共通の秘密鍵のパス>" <ユーザー名>@<ラズパイのIPアドレス>
+   ssh -i "<atLIB共通の秘密鍵のパス>" atladmin@<ラズパイのIPアドレス>
    ```
-10. **確認**: パスワードを聞かれずにログインできること
-11. **確認**: 一度ログアウトし、あえて秘密鍵を指定せずに同じ接続を試みる。パスワードでのログインが拒否されること（鍵がないと入れない状態になっていること）
+7. **確認**: パスワードを聞かれずにログインできること
+8. **操作**: `sudo rpi-eeprom-config --edit` を実行する。エディタが開くので、`BOOT_ORDER`の値を内蔵ストレージのみを使う設定に変更して保存する（**これはSDカードの複製には含まれないため、台ごとに必ず毎回実施すること**）
+9. **確認**: `ssh-keygen -l -f /etc/ssh/ssh_host_ed25519_key.pub` を実行し、他の台と違う指紋が表示されること（初回起動時に自動で新しい鍵が作られている証拠）
 
 ---
 
@@ -430,7 +427,7 @@ a.xref-missing::after { content: ""; }
    ```bash
    sudo /etc/chisel/add_customer.sh <顧客ID>
    ```
-3. **確認**: 実行結果に `port` ・ `username` ・ `password` の3つの値が表示される。**この3つを必ずメモ帳に控える**（手順3で使う）
+3. **確認**: 実行結果に `port` ・ `chisel username` ・ `chisel password` ・ `tinyproxy username` ・ `tinyproxy password` の5つの値が表示される。**この5つを必ずメモ帳に控える**（手順3・6で使う）
 4. **操作**: 続けて以下を実行し、設定を反映させる
    ```bash
    sudo systemctl restart chisel-server
@@ -441,31 +438,33 @@ a.xref-missing::after { content: ""; }
 
 ## 手順3: ラズパイ本体に設定を入れる
 
-1. **操作**: `20260702_SenseEdge構築時投入config.txt` というファイルを開く
-2. **操作**: ファイル冒頭の5つの変数を書き換える
+1. **操作**: `Sensor Edge/kitting-script.sh` というファイルを開く
+2. **操作**: ファイル冒頭の7つの変数を書き換える
 
    | 変数名 | 何を入れるか |
    |---|---|
    | `NEW_HOSTNAME` | この顧客用のプロキシ名（自分で決める。例: `atlib-proxy-02`） |
    | `NEW_PSK_ID` | この顧客用の識別子（自分で決める。例: `PSK-CUSTOMER-02`） |
    | `CHISEL_PORT` | 手順2でメモした`port` |
-   | `CHISEL_USER` | 手順2でメモした`username` |
-   | `CHISEL_PASS` | 手順2でメモした`password` |
+   | `CHISEL_USER` | 手順2でメモした`chisel username` |
+   | `CHISEL_PASS` | 手順2でメモした`chisel password` |
+   | `TINYPROXY_USER` | 手順2でメモした`tinyproxy username` |
+   | `TINYPROXY_PASS` | 手順2でメモした`tinyproxy password` |
 
-3. **画面/コマンド**: 対象のラズパイに、手順1の手順9と同じ方法でSSH接続する（IPアドレスが分からない場合は手順1の手順8を参照。既にセットアップ済みのSDカードを使い回している場合も、IPアドレスの調べ方・接続方法は同じ）
+3. **画面/コマンド**: 対象のラズパイに、手順1の手順6と同じ方法でSSH接続する
    ```bash
-   ssh -i "<atLIB共通の秘密鍵のパス>" <ユーザー名>@<ラズパイのIPアドレス>
+   ssh -i "<atLIB共通の秘密鍵のパス>" atladmin@<ラズパイのIPアドレス>
    ```
-4. **操作**: 書き換えたファイルの中身を、上記で接続したターミナルに、**上から順番に、以下の6つのブロックに分けて**貼り付けて実行する。**一気に全部貼り付けない**（自分自身の接続が切れてしまうことがあるため）
-   1. ブロック1（ファイル内 A・B・B2の部分）を貼り付けて実行する
-      - **確認**: 今のSSH接続はそのまま閉じずに、**別のウィンドウをもう1つ開いて**、鍵でログインできることを確認してから次に進む（万一失敗した場合に元の接続が生きているようにするため）
-   2. ブロック2（B3・B4・B5・B6・B8の部分）を貼り付けて実行する（ここではまだ何も切断されない）
-   3. `sudo rpi-eeprom-config --edit` を実行する。エディタが開くので、`BOOT_ORDER`の値を内蔵ストレージのみを使う設定に変更して保存する
-   4. ブロック3（C〜Iの部分）を貼り付けて実行する
-   5. **操作**: `ip -brief link` を実行し、**確認**: `eth0`（有線LAN）が`UP`になっていて、IPアドレスが振られていることを確認する。これを確認できたら `sudo reboot` を実行する（Wi-Fiは再起動と同時に使えなくなるため、必ず有線LANを先につないでおくこと）
-   6. 再起動後、有線LAN経由・鍵認証で再度SSHログインできることを確認する
-5. **確認**: 最後に画面に表示される **Hostname** ・ **PSK Identity** ・ **PSK Key** の3つを必ずメモ帳に控える（手順5で使う）
-6. **確認**: 「Connected」というログが表示されること
+4. **操作**: 書き換えたファイルを転送し、実行する
+   ```bash
+   chmod +x kitting-script.sh
+   ./kitting-script.sh
+   ```
+   **確認**: 変数の書き換え忘れがあれば、スクリプトがエラーで自動的に止まる（`__REPLACE_ME__`のままの箇所が残っているという意味なので、手順2に戻って値を確認する）
+5. **操作**: `ip -brief link` を実行し、**確認**: `eth0`（有線LAN）が`UP`になっていて、IPアドレスが振られていることを確認する。これを確認できたら `sudo reboot` を実行する（Wi-Fiは再起動と同時に使えなくなるため、必ず有線LANを先につないでおくこと）
+6. **確認**: 再起動後、有線LAN経由・鍵認証で再度SSHログインできること
+7. **確認**: スクリプト実行時の画面に表示された **Hostname** ・ **PSK Identity** ・ **PSK Key** ・ **tinyproxy BasicAuth username** の4つを必ずメモ帳に控える（手順5・6で使う）
+8. **確認**: 「Connected」というログが表示されること
 
 ---
 
@@ -495,14 +494,23 @@ a.xref-missing::after { content: ""; }
 
 ## 手順6: 技術者用の遠隔操作ファイルを作る
 
-1. **操作**: `InfraVision_Launcher_Template.bat` をコピーして新しいファイルを作る
-2. **操作**: ファイル冒頭の3行を書き換える
+2026-07-13より、顧客先に設置されたSensor Edgeへは直接アクセスできず、**IAPトンネルを張ってから**アクセスする方式になった。
+
+1. **画面/コマンド**: 以下を実行し、IAPトンネルを起動する（`<手順2でメモしたport>`を実際の値に置き換える。このウィンドウは作業中ずっと開いたままにしておく）
+   ```powershell
+   gcloud compute start-iap-tunnel zabbix-server <手順2でメモしたport> --local-host-port=localhost:<同じport> --zone=asia-northeast1-a --project=msp-zabbix
+   ```
+   **確認**: `Listening on port [...]` と表示されること
+2. **操作**: `InfraVision_Launcher_Template.bat` をコピーして新しいファイルを作る
+3. **操作**: ファイル冒頭の変数を書き換える
    ```bat
    SET CUSTOMER_ID=<顧客ID>
    SET CHISEL_PORT=<手順2でメモしたport>
+   SET TINYPROXY_USER=<手順2でメモしたtinyproxy username>
+   SET TINYPROXY_PASS=<手順2でメモしたtinyproxy password>
    SET TARGET_URL=<顧客サイトの管理対象機器のURL>
    ```
-3. **確認**: このbatファイルをダブルクリックすると、Chrome経由で顧客サイトの機器にリモートアクセスできることを確認する
+4. **確認**: IAPトンネルを起動した状態でこのbatファイルをダブルクリックすると、Chrome経由で顧客サイトの機器にリモートアクセスできることを確認する
 
 ---
 
@@ -546,7 +554,7 @@ a.xref-missing::after { content: ""; }
    ```
    **確認**: 何か表示されること（ポートが実際に使われている）
 4. **画面**: Zabbix管理画面の **Administration > Proxies** で、該当プロキシが **「Available」** になっていることを確認する
-5. **操作**: 手順6で作った起動batファイルを実際にダブルクリックし、ブラウザで顧客先の機器の管理画面が表示されることを確認する
+5. **操作**: 手順6のIAPトンネルを起動した状態で、起動batファイルを実際にダブルクリックし、ブラウザで顧客先の機器の管理画面が表示されることを確認する
 6. これが確認できたら作業完了
 
 ---
@@ -562,7 +570,8 @@ a.xref-missing::after { content: ""; }
 **操作**:
 1. 手順2と同じ方法（`gcloud compute ssh zabbix-server --zone=asia-northeast1-a`）で`zabbix.atlib.jp`にSSH接続し、`customer_ledger.csv`の該当顧客の`username`/`password`を無効化する
 2. `/etc/chisel/users.json`から該当エントリを削除し、`sudo systemctl restart chisel-server`を実行する
-3. Zabbix管理画面で該当プロキシを削除するか、PSKを再生成する（PSKローテーションの手順は`msp-frontend-server/実施手順_ZabbixProxy_PSKローテーション.md`を参照）
+3. 機器がまだ手元にある、またはIAPトンネル経由でアクセスできる場合は、`/etc/tinyproxy/tinyproxy.conf`のBasicAuth行を削除・変更する
+4. Zabbix管理画面で該当プロキシを削除するか、PSKを再生成する（PSKローテーションの手順は`msp-frontend-server/実施手順_ZabbixProxy_PSKローテーション.md`を参照）
 
 この作業は顧客ごとに個別の認証情報になっているため、他のお客様には影響しない。
 
@@ -572,11 +581,17 @@ a.xref-missing::after { content: ""; }
 
 ### 顧客先のブラウザ・SSHアクセスがタイムアウトする
 
-顧客先に発送済みの機器は、手順1・3で使った「同じLAN内から直接SSH」はできない（顧客のネットワーク内にあるため）。代わりに、Sensor Edge自身が動かす中継機能（tinyproxy）経由で自分自身に折り返す形で接続する必要がある。接続方法は`msp-frontend-server/実施手順_ZabbixProxy_PSKローテーション.md`の「始める前に」に手順があるので、そちらに従って接続し、以下を実行して復旧を試みる。
+顧客先に発送済みの機器は、手順1・3で使った「同じLAN内から直接SSH」はできない（顧客のネットワーク内にあるため）。手順6と同じ方法でIAPトンネルを起動し、PuTTYのProxy設定（HTTP, hostname=`localhost`, Port=当該CHISEL_PORT, Username/Password=手順2でメモしたtinyproxy認証情報）で接続し、以下を実行して復旧を試みる。
 ```bash
 sudo systemctl restart tinyproxy
 ```
 それでも直らない場合は担当エンジニアに連絡する。
+
+### IAPトンネルやtinyproxyの認証で弾かれる
+
+- `gcloud compute start-iap-tunnel`のウィンドウがまだ開いているか確認する（閉じるとトンネルも切れる）
+- 自分のGoogleアカウントに、対象インスタンスへのIAPアクセス権限があるか担当エンジニアに確認する
+- PuTTY/ChromeのProxy設定のUsername/Passwordが、手順2でメモしたtinyproxy認証情報と一致しているか確認する（手打ちミスが多い）
 
 ### 新規顧客が繋がらない
 
@@ -1371,9 +1386,11 @@ Sensor Edgeの動作不良・顧客からの故障報告等、何か問題が起
 - お客様から問い合わせが来たとき（電話・メール等） → 手順C（スプレッドシートに直接記録。お問い合わせフォームは顧客本人が使うためのもの）
 </script>
 <script type="text/plain" id="src-sensor-edge">
-最終更新: 2026-07-12
-関連ファイル: `add_customer.sh` / `20260702_SenseEdge構築時投入config.txt` / `InfraVision_Launcher_Template.bat`
-関連ドキュメント: [msp-frontend-server/運用手順書_ZabbixProxy_PSKローテーション.md](../msp-frontend-server/運用手順書_ZabbixProxy_PSKローテーション.md)（PSKの定期ローテーション手順）、[Sensor Edge/運用手順書_機器管理システム.md](運用手順書_機器管理システム.md)（手順8で使用する機器登録フォームの詳細）
+最終更新: 2026-07-13
+関連ファイル: `add_customer.sh` / `base-image-setup.sh` / `kitting-script.sh` / `InfraVision_Launcher_Template.bat`
+関連ドキュメント: [Sensor Edge/運用手順書_ベースイメージ作成.md](運用手順書_ベースイメージ作成.md)（ゴールデンイメージ作成・複製の詳細手順、手順1が参照）、[msp-frontend-server/運用手順書_ZabbixProxy_PSKローテーション.md](../msp-frontend-server/運用手順書_ZabbixProxy_PSKローテーション.md)（PSKの定期ローテーション手順）、[Sensor Edge/運用手順書_機器管理システム.md](運用手順書_機器管理システム.md)（手順8で使用する機器登録フォームの詳細）
+
+> **注**：2026-07-13より、chiselのリバースフォワードポート(20001-30000)はCloud IAP経由でのみアクセス可能（`0.0.0.0/0`公開は廃止）とし、tinyproxyにもBasicAuth認証を追加した（詳細は本書「システム構成」・手順6を参照）。台ごとの構築プロセスも同日、真のゴールデンイメージ方式に再設計した（[運用手順書_ベースイメージ作成.md](運用手順書_ベースイメージ作成.md)）。
 
 ## 目的
 
@@ -1381,7 +1398,7 @@ Sensor Edgeの動作不良・顧客からの故障報告等、何か問題が起
 
 顧客先に発送後は物理的にatLIBの管理外に置かれ、かつローカル保守は行わない（故障時は交換対応）運用方針のため、**初期構築時点で台ごとに固有の認証情報を設定し、可能な限りパスワード自体を無効化してSSH鍵認証のみに寄せる**ことが最も費用対効果の高い対策になる。
 
-**補足（イメージ再作成は必須ではない）**：手順1（Raspberry Pi Imagerでの台ごとの固有パスワード設定）は、`20260702_SenseEdge構築時投入config.txt`のB2（SSHパスワード認証無効化）が実行されるまでの短い窓（atLIBの手元・発送前のみ存在する窓）を塞ぐための保険的な対策であり、必須ではない。**現行の共通イメージをそのまま使い、B2を実行する前にatLIBの管理用SSH公開鍵を現在のユーザーの`~/.ssh/authorized_keys`へ手動で追加しておく**（`ssh-copy-id`等、現状の共通パスワードでログインした状態で1回実施）だけでも、B2実行後は同等の安全性が得られる（パスワード自体が無効化されるため、元のイメージが共通パスワードだったかは以降の安全性に影響しない）。手順1は「余裕があれば・新規に量産する場合に」実施する位置づけとし、急ぐ場合は手順2（GCPリレーサーバーでの顧客払い出し）から始めてよい。
+**2026-07-13更新（ベースイメージ方式への移行）**：以前はここで「イメージ再作成は必須ではない、共通イメージのままでもB2実行後は同等の安全」という補足を記載していたが、真のゴールデンイメージ方式（[運用手順書_ベースイメージ作成.md](運用手順書_ベースイメージ作成.md)）に移行したことで、SSH鍵認証・パスワード認証無効化は**ベースイメージの時点で全台共通に適用済み**となった。台ごとの初期パスワードそのものが存在しない（ベースイメージ作成時に一度設定した仮パスワードは、その場でパスワード認証自体を無効化するため実質使われない）ため、本項で懸念していた「共通パスワードが使い回される窓」は構造的に発生しない。手順1は「ベースイメージをSDカードへ複製する」作業に置き換わった。
 
 ## 前提
 
@@ -1406,36 +1423,26 @@ Sensor Edgeの動作不良・顧客からの故障報告等、何か問題が起
 ### システム構成（GCPリレー・Chisel関連）
 
 - 中継サーバー: `zabbix.atlib.jp` (GCP, project: msp-zabbix, instance: zabbix-server)
-- Chiselサーバー: `zabbix.atlib.jp:8080` で待受、`/etc/chisel/users.json` による顧客別PSK認証（2026-07-02〜）
-- GCPファイアウォール `allow-infravision-proxy`: `tcp:20001-30000` を開放済み（以後、顧客が増えてもGCP側の追加作業は不要）
-- 顧客台帳: `zabbix.atlib.jp:/etc/chisel/customer_ledger.csv`
-- 各顧客のSensor Edge（ラズパイ）は `chisel-client.service` で `zabbix.atlib.jp:8080` へアウトバウンド接続し、`R:<顧客ポート>:127.0.0.1:8888`（tinyproxy）をリバース公開
+- Chiselサーバー: `zabbix.atlib.jp:8080` で待受、`/etc/chisel/users.json` による顧客別PSK認証（2026-07-02〜）。この8080番はSensor Edgeからの未知・動的な発信元IPを受け付ける必要があるため`0.0.0.0/0`のまま
+- GCPファイアウォール `allow-infravision-proxy`: `tcp:20001-30000`（リバースフォワードされたトンネル本体）を開放。**2026-07-13より、送信元をCloud IAPのソースレンジ(`35.235.240.0/20`)のみに制限**（以前は`0.0.0.0/0`で、ポート番号を知っていれば誰でも認証なしに顧客LAN内へアクセスできる状態だったため是正した）。このポート範囲へ実際に接続するのはSensor Edgeではなく社内エンジニアの端末のみのため、IAP制限してもSensor Edge⇔chisel-server間のトンネル確立には影響しない
+- **社内エンジニアが技術者用リモートアクセス（手順6）でSensor Edgeへ接続する際は、`gcloud compute start-iap-tunnel zabbix-server <port> --local-host-port=localhost:<port> --zone=asia-northeast1-a --project=msp-zabbix`でIAPトンネルを張ってから、PuTTY/Chromeの接続先を`zabbix.atlib.jp`ではなく`localhost`に向ける**
+- tinyproxy(8888、Sensor Edge側でHTTP CONNECTプロキシとして稼働)には**2026-07-13よりBasicAuth認証を追加**（顧客ごとに個別発行、`add_customer.sh`が`tinyproxy_user`/`tinyproxy_pass`として払い出す）。IAP保護と合わせた多層防御
+- 顧客台帳: `zabbix.atlib.jp:/etc/chisel/customer_ledger.csv`（列: `customer_id,port,username,password,登録日,status,tinyproxy_user,tinyproxy_pass`）
+- 各顧客のSensor Edge（ラズパイ）は `chisel-client.service` で `zabbix.atlib.jp:8080` へアウトバウンド接続し、`R:<顧客ポート>:127.0.0.1:8888`（tinyproxy）をリバース公開。tinyproxyの`ConnectPort`は`443`/`22`のみに制限済み
 - 顧客環境側のファイアウォール変更は**不要**（アウトバウンド接続のため）
 
 ---
 
-## 手順1: ゴールデンイメージ作成（推奨・必須ではない）
+## 手順1: ベースイメージのSDカードへの複製
 
-### 1-1. Raspberry Pi Imagerでの書き込み
+2026-07-13より、台ごとにOSをフルセットアップする方式から、事前に構築済みのベースイメージ（`.img`）を複製する方式に変更した。詳細手順・初回のベースイメージ構築方法は[運用手順書_ベースイメージ作成.md](運用手順書_ベースイメージ作成.md)を参照。本手順ではPart B（新規Sensor Edgeへのベースイメージ展開）のみを実施する。
 
-1. Raspberry Pi Imagerを起動し、対象OSとして「Ubuntu Server 24.04 LTS (64-bit)」を選択
-2. 書き込み先SD/eMMCを選択
-3. 詳細設定（歯車アイコン、または`Ctrl+Shift+X`）を開き、以下を設定する
-   - **ホスト名**：台ごとに固有の名前を設定する（例: `atl-proxy-<customer_code>`、`customer_code`は`atlse000001`のような形式。顧客が確定していない先行作成の場合は連番でも可）
-   - **ユーザー名／パスワード**：台ごとに異なるランダムパスワードを生成して設定する（使い回さない）。生成したパスワードは、後述の台帳に記録する
-   - **SSHを有効化**：「公開鍵認証のみを許可」を選択し、atLIBの管理用SSH公開鍵を登録する
-   - **Wi-Fi設定**：設定しない（後述の手順でWi-Fi自体を無効化するため、ここで設定しても意味がない）
-4. 書き込みを実行する
+1. Win32DiskImagerで最新のベースイメージ`.img`を新しいSDカードへ書き込む
+2. 対象機に挿入しEthernet接続の上で起動、atLIBの管理用SSH秘密鍵でログインできることを確認する（鍵はベースイメージに焼き込み済みのため、台ごとの再登録は不要）
+3. `sudo rpi-eeprom-config --edit`で`BOOT_ORDER`を内蔵ストレージのみに変更する（**EEPROM設定はSDカード複製に含まれないため、台ごとに必須**）
+4. SSHホスト鍵がベースイメージ作成時と異なる（＝初回起動時に自動再生成された）ことを確認する
 
-### 1-2. 台帳への記録
-
-2026-07-12より、機器の記録は`Sensor Edge/運用手順書_機器管理システム.md`で構築したGWSベースの機器管理システムに一元化した。ホスト名・ユーザー名・登録したSSH公開鍵の識別子等は、この時点では控えのメモに留め、手順8（封印・資産記録・発送）で「Sensor Edge機器登録フォーム」にまとめて入力する（初期パスワードは鍵認証への移行完了後に破棄する運用は変わらない）。
-
-### 1-3. 初回起動・SSH鍵ログイン確認
-
-1. 書き込んだSD/eMMCを対象機に挿入し起動する
-2. Ethernet接続の上、atLIBの管理用SSH秘密鍵を使ってログインできることを確認する
-3. パスワードでのログインが拒否される（鍵なしでは入れない）ことを確認する
+台帳への記録（機器のシリアル番号・ホスト名等）は、`Sensor Edge/運用手順書_機器管理システム.md`のGWSベースの機器管理システムに一元化しており、手順8（封印・資産記録・発送）で「Sensor Edge機器登録フォーム」にまとめて入力する。
 
 ---
 
@@ -1448,11 +1455,13 @@ sudo /etc/chisel/add_customer.sh <顧客ID>
 # 例: sudo /etc/chisel/add_customer.sh customerB
 ```
 
-出力される以下3つを**必ずメモする**（手順3で使用）。
+出力される以下5つを**必ずメモする**（手順3で使用）。
 
 - `port`（例: 20002）
-- `username`（例: customerB-user）
-- `password`（自動生成された24文字のPSK）
+- `chisel username`（例: customerB-user）
+- `chisel password`（自動生成された24文字のPSK）
+- `tinyproxy username`（例: customerB-tp）
+- `tinyproxy password`（自動生成された24文字。2026-07-13より、tinyproxy側のリモートアクセス認証も顧客ごとに個別発行するようになった）
 
 払い出し後、変更を反映させる。
 
@@ -1464,33 +1473,31 @@ sudo systemctl restart chisel-server
 
 ---
 
-## 手順3: Sensor Edge（ラズパイ）へのconfig.txt投入
+## 手順3: Sensor Edge（ラズパイ）への`kitting-script.sh`投入
 
-手順2（GCPリレーサーバーでの顧客払い出し）を先に実施したうえで、`20260702_SenseEdge構築時投入config.txt`の投入に進む。手順1（イメージ再作成）を行わなかった場合は、ここに進む前に必ず**atLIBの管理用SSH公開鍵を現在のユーザーの`~/.ssh/authorized_keys`へ手動で追加**しておくこと。
+手順2（GCPリレーサーバーでの顧客払い出し）を先に実施したうえで、`kitting-script.sh`の投入に進む。
 
-`20260702_SenseEdge構築時投入config.txt`には2026-07-05よりB2〜B8のセキュリティハードニング項目（SSHパスワード認証無効化・シリアル/Wi-Fi/Bluetooth/HDMI/USB無効化・overlayroot化）が追加されている。これにより同ファイルはもはや「9行目以下を一気に投入」できず、**3ブロック＋1対話ステップ＋最終rebootに分けて投入する**構成になっている（B2・B4の追加により、一括実行すると自分自身のアクセス経路を切断するリスクがあるため）。各項目の注意書きを読んでから投入すること。
+2026-07-13より、SSHホスト鍵再生成・パスワード認証無効化・各種物理無効化・overlayroot化はベースイメージ側（手順1、[運用手順書_ベースイメージ作成.md](運用手順書_ベースイメージ作成.md)）で完了済みのため、本手順で行うのはChisel/tinyproxy/Zabbix Proxyへの**台ごとの認証情報投入のみ**になった（旧`20260702_SenseEdge構築時投入config.txt`のブロック1・2は不要）。
 
-1. `20260702_SenseEdge構築時投入config.txt` を開く
-2. 冒頭の5変数を書き換える
+1. `Sensor Edge/kitting-script.sh` を対象のラズパイへ転送する
+2. 冒頭の7変数を書き換える
 
    | 変数 | 内容 |
    |---|---|
    | `NEW_HOSTNAME` | 顧客ごとのプロキシ名（Zabbix登録用） |
    | `NEW_PSK_ID` | 顧客ごとのPSK識別子（Zabbix登録用、Chiselとは別物） |
    | `CHISEL_PORT` | 手順2で払い出されたport |
-   | `CHISEL_USER` | 手順2で払い出されたusername |
-   | `CHISEL_PASS` | 手順2で払い出されたpassword |
+   | `CHISEL_USER` | 手順2で払い出されたchisel username |
+   | `CHISEL_PASS` | 手順2で払い出されたchisel password |
+   | `TINYPROXY_USER` | 手順2で払い出されたtinyproxy username |
+   | `TINYPROXY_PASS` | 手順2で払い出されたtinyproxy password |
 
-3. イメージ展開済みのラズパイに、以下のブロック単位で投入・実行する
-   1. **ブロック1**（A・B・B2）を貼り付け・実行し、SSHホスト鍵の再生成とSSHパスワード認証の無効化を行う
-      - → **チェックポイント1**：既存セッションを閉じずに別ウィンドウで鍵認証ログインを確認してから次へ進む
-   2. **ブロック2**（B3・B4・B5・B6・B8）を貼り付け・実行する。いずれもconfig.txt編集または次回起動時に効く設定のみで、この時点では何も切断されない
-   3. **B7（対話ステップ）**：`sudo rpi-eeprom-config --edit`を単独で実行し、`BOOT_ORDER`を内蔵ストレージのみに変更する
-   4. **ブロック3**（C〜I）を貼り付け・実行し、Chisel/Zabbix Proxy設定とネットワーク設定を行う
-   5. **最終チェックポイント→reboot**：`ip -brief link`でEthernet(eth0)がUP・DHCP取得済みであることを確認してから`sudo reboot`する（Wi-Fiはrebootと同時に消えるため、reboot前に必ずEthernet接続を確立しておくこと）
-   6. **reboot後の確認**：Ethernet経由・鍵認証でSSHログインできること、`wlan0`が存在しないこと、chisel-client/zabbix-proxyが正常稼働していることを確認する（手順7と対応）
-4. 最後に表示される **Hostname / PSK Identity / PSK Key** を必ずメモに保存（手順5で使用）
-5. ブロック3内の接続確認で `Connected` のログが出ることを確認
+3. 実行する（`chmod +x kitting-script.sh && ./kitting-script.sh`）。書き換え忘れがあればスクリプトが`__REPLACE_ME__`を検知して自動的に中止する
+4. `sudo rpi-eeprom-config --edit`で`BOOT_ORDER`を内蔵ストレージのみに変更する（手順1で未実施の場合はここで必ず行う。EEPROM設定はSDカード複製に含まれないため毎回必須）
+5. **最終チェックポイント→reboot**：`ip -brief link`でEthernet(eth0)がUP・DHCP取得済みであることを確認してから`sudo reboot`する
+6. **reboot後の確認**：Ethernet経由・鍵認証でSSHログインできること、`wlan0`が存在しないこと、chisel-client/tinyproxy/zabbix-proxyが正常稼働していることを確認する（手順7と対応）
+7. スクリプト実行時に表示される **Hostname / PSK Identity / PSK Key / tinyproxy BasicAuth username** を必ずメモに保存（手順5・6で使用）
+8. スクリプト末尾の接続確認で `Connected` のログが出ることを確認
 
 ---
 
@@ -1526,15 +1533,22 @@ sudo systemctl restart chisel-server
 
 ## 手順6: Windows操作端末用の起動batファイル作成
 
-`InfraVision_Launcher_Template.bat` をコピーし、冒頭3変数を書き換える。
+2026-07-13より、20001-30000番ポートはCloud IAP経由でのみアクセス可能（直接`zabbix.atlib.jp:<port>`には接続できない）。また、tinyproxy側にもBasicAuth認証が必要になった。
 
-```bat
-SET CUSTOMER_ID=<顧客ID>
-SET CHISEL_PORT=<手順2で払い出されたport>
-SET TARGET_URL=<顧客サイトの管理対象機器URL>
-```
+1. まずIAPトンネルを起動する（別ウィンドウ、接続中は開いたままにする）
+   ```powershell
+   gcloud compute start-iap-tunnel zabbix-server <手順2で払い出されたport> --local-host-port=localhost:<同port> --zone=asia-northeast1-a --project=msp-zabbix
+   ```
+2. `InfraVision_Launcher_Template.bat` をコピーし、冒頭の変数を書き換える（接続先を`zabbix.atlib.jp`ではなく`localhost`にする点、tinyproxy認証情報を追加する点に注意）
+   ```bat
+   SET CUSTOMER_ID=<顧客ID>
+   SET CHISEL_PORT=<手順2で払い出されたport>
+   SET TINYPROXY_USER=<手順2で払い出されたtinyproxy username>
+   SET TINYPROXY_PASS=<手順2で払い出されたtinyproxy password>
+   SET TARGET_URL=<顧客サイトの管理対象機器URL>
+   ```
 
-技術者はこのbatを実行するだけでChrome経由のリモートアクセスができる。SSHで対象機器に入りたい場合は、bat末尾のコメントを参照しPuTTYのProxy設定（HTTP, zabbix.atlib.jp, Port=当該CHISEL_PORT）を行う。
+技術者はIAPトンネルを起動した状態でこのbatを実行するだけでChrome経由のリモートアクセスができる。SSHで対象機器に入りたい場合は、bat末尾のコメントを参照しPuTTYのProxy設定（HTTP, hostname=`localhost`, Port=当該CHISEL_PORT, Username/Password=tinyproxy認証情報）を行う。
 
 ---
 
@@ -1570,7 +1584,7 @@ sudo ss -tlnp | grep :<CHISEL_PORT>
 
 あわせて、Zabbix Server側で該当プロキシが「使用可能(Available)」表示になっているかを確認する（これはChiselトンネルとは独立した、Zabbix Proxy→Zabbix Serverの疎通確認になる）。
 
-Windows側の起動bat（手順6で作成したもの）を実際に実行し、ブラウザで対象機器の管理画面が表示されることを確認して完了とする。
+Windows側でIAPトンネルを起動し、起動bat（手順6で作成したもの）を実際に実行して、ブラウザで対象機器の管理画面が表示されることを確認して完了とする。
 
 ---
 
@@ -1585,8 +1599,9 @@ Sensor Edgeは物理的にatLIBの管理外に置かれる機器であり、内�
 失効させる対象：
 
 1. **Chisel認証情報**：`customer_ledger.csv`の該当顧客の`username`/`password`を無効化し、`/etc/chisel/users.json`から該当エントリを削除、`systemctl restart chisel-server`で反映する
-2. **Zabbix Proxy PSK**：Zabbix管理画面で該当Proxyホストを削除、またはPSKを再生成する
-3. （Clevis+Tang導入後）Tangサーバー側で該当デバイスの鍵解決を無効化し、返却された機器のSDカード内容が復号不能であることを確認する
+2. **tinyproxy BasicAuth**：該当機器へIAPトンネル経由でアクセスできる場合は`/etc/tinyproxy/tinyproxy.conf`のBasicAuth行を削除・変更する（機器が既に手元にない場合は、そのポート自体をIAP保護下から外す・chisel側の認証情報失効で実質無効化される点を確認する）
+3. **Zabbix Proxy PSK**：Zabbix管理画面で該当Proxyホストを削除、またはPSKを再生成する
+4. （Clevis+Tang導入後）Tangサーバー側で該当デバイスの鍵解決を無効化し、返却された機器のSDカード内容が復号不能であることを確認する
 
 この失効作業は顧客ごとに個別のPSK・認証情報を持つ設計になっているため、他顧客への影響なく実施できる。
 
@@ -1598,12 +1613,19 @@ Sensor Edgeは物理的にatLIBの管理外に置かれる機器であり、内�
 
 Sensor Edge側のtinyproxyが詰まっている可能性がある（2026-07-01に実際に発生した既知の障害。原因はlogrotateの`reload`シグナルでtinyproxyのログFDが壊れ、ワーカースレッドが枯渇する不具合）。
 
-対策済み: `/etc/logrotate.d/tinyproxy` のpostrotateを `reload` → `restart` に変更し、深夜の定期ローテートでは再発しない設定にしてある（2026-07-02対応）。それでも発生した場合は、当該Sensor Edgeへ直接SSHし `sudo systemctl restart tinyproxy` で復旧する。
+対策済み: `/etc/logrotate.d/tinyproxy` のpostrotateを `reload` → `restart` に変更し、深夜の定期ローテートでは再発しない設定にしてある（2026-07-02対応、`base-image-setup.sh`に移植済み）。それでも発生した場合は、IAPトンネル経由で当該Sensor EdgeへSSHし `sudo systemctl restart tinyproxy` で復旧する。
+
+### 接続時に401/認証エラーになる
+
+2026-07-13以降、IAPトンネル（Googleアカウント権限）とtinyproxy BasicAuthの2段階認証が必要。以下を確認する。
+
+- IAPトンネルが起動しているか（`gcloud compute start-iap-tunnel`のウィンドウが生きているか）、実行者に対象インスタンスへの`roles/iap.tunnelResourceAccessor`権限があるか
+- PuTTY/ChromeのProxy設定のUsername/Passwordが、手順2で払い出されたtinyproxy認証情報と一致しているか（手打ちミスに注意）
 
 ### 新規顧客が繋がらない
 
 - `add_customer.sh` 実行後に `systemctl restart chisel-server` を忘れていないか確認
-- Sensor Edge側の `CHISEL_USER`/`CHISEL_PASS` が手順2の払い出し値と一致しているか確認（手打ちミスに注意）
+- Sensor Edge側の `CHISEL_USER`/`CHISEL_PASS` が手順2の払い出し値と一致しているか確認（手打ちミスに注意。`kitting-script.sh`は`__REPLACE_ME__`の消し忘れは検知するが、値そのものの転記ミスは検知できない）
 - 台帳(`customer_ledger.csv`)とusers.jsonの内容が一致しているか確認
 
 ---
@@ -1615,6 +1637,7 @@ Sensor Edge側のtinyproxyが詰まっている可能性がある（2026-07-01�
 - 2026-07-06: `運用手順書_ゴールデンイメージ作成.md`の内容を本ドキュメントに統合。ラズパイのゴールデンイメージ作成からconfig.txt投入・Zabbix登録・発送・疎通確認・契約終了時失効までを、Sensor Edge構築の一連の流れとして手順1〜10の1本にまとめた。単独ファイルとしての`運用手順書_ゴールデンイメージ作成.md`は廃止。
 - 2026-07-12: 運用手順書のトータル棚卸しに伴い、手順5（Zabbix Serverへのホスト登録）を「従来通り」の一文から、Administration > Proxiesでの具体的な操作手順に差し替え。前提セクションに対象ハードウェア（Raspberry Pi 5・1GB RAMモデル）と監視対象機器の上限（SNMP監視機器50台）を明記。Zabbix Proxy PSKローテーション手順書（`msp-frontend-server/運用手順書_ZabbixProxy_PSKローテーション.md`）への参照を追加。
 - 2026-07-12（同日追記）: GWSベースの機器管理システム（`Sensor Edge/運用手順書_機器管理システム.md`）を新設し、手順1-2・手順8の「台帳に記録する」という手作業を「機器登録フォームに入力する」に置き換えた。
+- 2026-07-13: 「VPN代替として安全」という顧客向け説明の準備調査で、(1) `chisel-client.service`のExecStartが`$CHISEL_ARGS`を参照せずハードコードされていた不具合、(2) リバースフォワードポート(20001-30000)自体に着信認証が一切なく`0.0.0.0/0`公開だった脆弱性、(3) tinyproxyに認証が無かった問題、(4) chisel共有パスワードがsystemdコメントに平文で残存、を発見・是正。GCPファイアウォールをCloud IAPソースレンジのみに制限、tinyproxyにBasicAuth追加、chisel認証情報を刷新。あわせて、台ごとにOSをフルセットアップする非効率な運用を、真のゴールデンイメージ方式（`base-image-setup.sh`＋`kitting-script.sh`＋[運用手順書_ベースイメージ作成.md](運用手順書_ベースイメージ作成.md)）に再設計し、`20260702_SenseEdge構築時投入config.txt`を廃止。`add_customer.sh`をtinyproxy認証情報の払い出しにも対応させ、`customer_ledger.csv`に列を追加。手順1・3・6・9・10・トラブルシューティングを新プロセスに合わせて全面改訂。
 </script>
 <script type="text/plain" id="src-onboarding">
 最終更新: 2026-07-12
@@ -2773,6 +2796,116 @@ Sensor Edge（顧客拠点設置のラズパイ）の資産情報（シリアル
 - 2026-07-12（同日改訂4）: 機器登録・故障報告フォームの実URLを反映。お問い合わせフォームは顧客に直接案内せず、`msp-customer-portal`の`/inquiry.html`にお問い合わせページを実装し、そこからサーバー間POSTでこのフォームへ送信する構成に変更（既存のApps Script通知・スプレッドシート記録パイプラインはそのまま流用）。
 - 2026-07-12（同日改訂5）: お問い合わせフォームの実運用テストで`TypeError: Cannot read properties of undefined (reading '会社名')`が発生。原因はフォーム自体に紐付けたインストール型トリガーでは`e.namedValues`が使えないこと（Spreadsheet側のフォーム送信イベントと混同していた）。3つの`onFormSubmit`すべてを`e.response.getItemResponses()`ベースの回答取得に修正。
 </script>
+<script type="text/plain" id="src-base-image">
+## 目的・背景
+
+従来の`運用手順書_顧客追加フロー.md`手順1〜3は、台ごとにまっさらなUbuntu Serverへ10ブロックの手作業（SSHホスト鍵再生成・パスワード認証無効化・各種無効化・overlayroot化・chisel/tinyproxy/zabbix-proxyのインストールと設定）をフルで実施する運用だった。MSPサービスとしてSensor Edgeを多数展開していく上で非効率であり、かつ`chisel-client.service`のExecStartが`$CHISEL_ARGS`を参照せずハードコードされる不具合（2026-07-13発覚、パイロット機で発生）のような「文書化されない一度きりの手作業」が積み重なるリスクも高かった。
+
+本書では、台ごとに変える必要がない設定を1枚の**ベースイメージ**（`.img`ファイル）に集約し、複製するだけで済むようにする。台ごとに必ずユニークな値（ホスト名・chisel認証情報・Zabbix PSK等）だけを、複製後に`kitting-script.sh`で注入する。
+
+## 全体の流れ
+
+```
+[1回だけ] 基準機を作る → Win32DiskImagerで.img化 → ベースイメージとして保管
+[台ごと]  ベースイメージをSDカードに書き込み → 起動 → kitting-script.sh実行 → EEPROM設定 → reboot → Zabbix登録・発送
+```
+
+---
+
+## Part A: ベースイメージの作成（1回だけ、または`base-image-setup.sh`更新時に再実施）
+
+### A-1. 基準機へのOS書き込み
+
+`運用手順書_顧客追加フロー.md`手順1-1と同じ要領。
+
+1. Raspberry Pi Imagerを起動し、OSとして「Ubuntu Server 24.04 LTS (64-bit)」を選択
+2. 書き込み先SD/eMMCを選択
+3. 詳細設定（歯車アイコン、`Ctrl+Shift+X`）を開く
+   - **ホスト名**：`sensoredge-base`等、ベースイメージ用と分かる仮の名前でよい（複製後にkitting-script.shで上書きされる）
+   - **ユーザー名／パスワード**：仮のユーザー名・パスワードを設定してよい（後述の通り、ベースイメージ作成の最終段階でパスワード認証自体を無効化するため、この初期パスワードは一時的にしか使わない）
+   - **SSHを有効化**：「公開鍵認証のみを許可」を選択し、atLIBの管理用SSH公開鍵を登録する（**これは全台共通の鍵であり、ここで登録すればベースイメージに焼き込まれ、以後の複製機には再設定不要になる**）
+   - **Wi-Fi設定**：設定しない
+4. 書き込みを実行し、対象機に挿入して起動する
+
+### A-2. `base-image-setup.sh`の実行
+
+1. Ethernet接続の上、atLIBの管理用SSH秘密鍵でログインできることを確認する
+2. `Sensor Edge/base-image-setup.sh`をこの基準機へ転送し、実行する
+   ```bash
+   scp -i <atLIB管理鍵> base-image-setup.sh atladmin@<基準機IP>:~/
+   ssh -i <atLIB管理鍵> atladmin@<基準機IP>
+   chmod +x base-image-setup.sh
+   ./base-image-setup.sh
+   ```
+3. エラーなく完了することを確認する（chiselのバージョン表示、各パッケージのインストールログ等が流れる）
+4. スクリプト完了後に表示される案内に従い、以下を手動で実施する
+   - **EEPROM設定はここでは触らない**（台ごとに個別対応のため。Part Bで説明）
+   - `sudo truncate -s 0 /etc/machine-id`
+   - `sudo rm -f /etc/ssh/ssh_host_*_key*`
+   - `sudo shutdown -h now`
+
+### A-3. Win32DiskImagerで`.img`化
+
+1. 基準機の電源を切ったことを確認し、SDカードを取り外してWindows機に接続する
+2. Win32DiskImagerを起動し、「Read」タブでこのSDカードから`.img`ファイルを読み出す
+   - ファイル名は日付を含める（例: `sensoredge-base_20260713.img`）
+3. 読み出した`.img`を安全な場所（社内共有ドライブ等、`Sensor Edge`ディレクトリと同じ管理下）に保管する
+   - **保管上の注意**: このイメージにはatLIBの管理用SSH**公開鍵**（秘密鍵ではない）と、`base-image-setup.sh`で投入した各種設定が含まれる。機密の認証情報（chisel/tinyproxy/Zabbix PSK）は含まれない（すべてプレースホルダー`__REPLACE_ME__`のまま）が、将来のSensor Edge全台の設定ベースラインそのものであるため、アクセス権は`msp-staff@atlib.jp`相当に限定する
+4. （任意・推奨）イメージサイズが大きい場合、Linux/WSL環境があれば`PiShrink`等でイメージの空き容量部分を削減し、複製時間を短縮する
+
+### A-4. ベースイメージの更新（`base-image-setup.sh`を修正した場合）
+
+Part Aを最初からやり直す。バージョン管理のため、`.img`ファイル名に日付を含め、旧バージョンもしばらく残しておく（展開済みの台のトラブルシュート時に、当時のベースがどうだったか参照できるようにするため）。
+
+---
+
+## Part B: 新規Sensor Edgeへのベースイメージ展開（台ごとに毎回実施）
+
+### B-1. SDカードへの書き込み
+
+1. Win32DiskImagerを起動し、「Write」タブで最新の`.img`ファイルを選択
+2. 新しいSDカードを書き込み先に選択し、書き込みを実行する
+   - Raspberry Pi Imagerの「カスタムイメージを使用」機能でも同様に書き込み可能（どちらでもよい）
+
+### B-2. 初回起動・EEPROM設定
+
+1. 書き込んだSDカードを対象機に挿入し、Ethernet接続の上で起動する
+2. atLIBの管理用SSH秘密鍵でログインできることを確認する（ベースイメージに焼き込み済みのため、鍵の再登録は不要）
+3. **`sudo rpi-eeprom-config --edit`を実行し、`BOOT_ORDER`を内蔵ストレージ（SD/eMMC）のみに変更して保存する**
+   - EEPROM設定はラズパイ本体のオンボードチップに保存され、SDカードの複製には一切含まれない。**そのため、ベースイメージ化してもこの手順だけは毎回必須**であることに注意
+4. `ssh-keygen -l -f /etc/ssh/ssh_host_ed25519_key.pub`等で、SSHホスト鍵がベースイメージ作成時のものと異なる（＝初回起動時に正しく再生成された）ことを確認する
+
+### B-3. `kitting-script.sh`の実行
+
+`運用手順書_顧客追加フロー.md`手順2（`add_customer.sh`の実行）を先に済ませ、払い出された値を使う。
+
+1. `Sensor Edge/kitting-script.sh`を対象機へ転送する
+2. 冒頭の7変数（`NEW_HOSTNAME`・`NEW_PSK_ID`・`CHISEL_PORT`・`CHISEL_USER`・`CHISEL_PASS`・`TINYPROXY_USER`・`TINYPROXY_PASS`）を、`add_customer.sh`の出力で書き換える
+3. 実行する
+   ```bash
+   chmod +x kitting-script.sh
+   ./kitting-script.sh
+   ```
+4. スクリプト末尾に表示される`Hostname`/`PSK Identity`/`PSK Key`/`tinyproxy BasicAuth username`をメモに保存する（Zabbix登録・起動batファイル作成で使用）
+5. `Connected`のログが出ることを確認する
+
+### B-4. 最終確認・reboot
+
+`運用手順書_顧客追加フロー.md`手順7（発送前の最終確認）以降は変更なし。`ip -brief link`でEthernetがUP・DHCP取得済みであることを確認してから`sudo reboot`し、reboot後に鍵認証ログイン・`wlan0`不在・chisel-client/zabbix-proxy正常稼働を確認する。
+
+以降（Zabbix Server登録・起動batファイル作成・封印/資産記録・発送）は`運用手順書_顧客追加フロー.md`手順5〜8を参照。
+
+---
+
+## 所要時間の目安
+
+- Part A（ベースイメージ作成）：初回のみ。以後は`base-image-setup.sh`変更時のみ再実施
+- Part B（台ごとの展開）：SDカード書き込み（5〜15分、カード容量による）＋ EEPROM設定（数分）＋ `kitting-script.sh`実行（1分未満）＋ 最終確認。従来の10ブロック手作業と比べ、大幅に短縮される
+
+## 変更履歴
+
+- 2026-07-13: 新規作成。chisel-client.serviceのExecStartハードコード不具合の発覚をきっかけに、真のゴールデンイメージ方式へ再設計。
+</script>
 
 <script>
 (function () {
@@ -2795,7 +2928,8 @@ Sensor Edge（顧客拠点設置のラズパイ）の資産情報（シリアル
     { slug: "pw-db",       group: "spec", tag: "05", title: "zabbix-server DBパスワード ローテーション" },
     { slug: "psk-proxy",   group: "spec", tag: "06", title: "Zabbix Proxy PSK ローテーション" },
     { slug: "backup-dr",   group: "spec", tag: "07", title: "バックアップ・DR方針" },
-    { slug: "device-mgmt", group: "spec", tag: "08", title: "機器管理・故障履歴・問い合わせ管理" }
+    { slug: "device-mgmt", group: "spec", tag: "08", title: "機器管理・故障履歴・問い合わせ管理" },
+    { slug: "base-image",  group: "spec", tag: "09", title: "Sensor Edge ベースイメージ作成" }
   ];
   var FILENAME_TO_SLUG = {
     "運用手順書_顧客追加フロー.md": "sensor-edge",
@@ -2813,7 +2947,8 @@ Sensor Edge（顧客拠点設置のラズパイ）の資産情報（シリアル
     "運用手順書_バックアップDR方針.md": "backup-dr",
     "実施手順_バックアップDR方針.md": "guide-backup-dr",
     "運用手順書_機器管理システム.md": "device-mgmt",
-    "実施手順_機器管理システム.md": "guide-device-mgmt"
+    "実施手順_機器管理システム.md": "guide-device-mgmt",
+    "運用手順書_ベースイメージ作成.md": "base-image"
   };
 
   function esc(s) {
