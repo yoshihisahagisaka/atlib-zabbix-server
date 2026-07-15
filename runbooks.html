@@ -363,14 +363,14 @@ a.xref-missing::after { content: ""; }
       <button class="theme-btn" id="themeToggle" type="button" aria-label="配色を切り替え">
         <span id="themeIcon">◐</span><span id="themeLabel">配色を切替</span>
       </button>
-      <p class="gen-note">上段「操作ガイド」は非技術者向けの実施手順、下段「運用仕様書」は詳細な技術背景です。文中の水色リンクをクリックすると該当箇所へ移動します。生成日: 2026-07-14</p>
+      <p class="gen-note">上段「操作ガイド」は非技術者向けの実施手順、下段「運用仕様書」は詳細な技術背景です。文中の水色リンクをクリックすると該当箇所へ移動します。生成日: 2026-07-15</p>
     </div>
   </nav>
   <main class="main" id="main"></main>
 </div>
 
 <script type="text/plain" id="src-guide-sensor-edge">
-最終更新: 2026-07-13
+最終更新: 2026-07-15
 対応する詳細仕様書: `Sensor Edge/運用手順書_顧客追加フロー.md`（用語の意味や「なぜこうなっているか」はそちらを参照。本ページは「何をどう操作するか」だけに絞っている）
 ベースイメージの作り方: `Sensor Edge/運用手順書_ベースイメージ作成.md`
 機器登録フォームの使い方: `Sensor Edge/実施手順_機器管理システム.md`
@@ -387,7 +387,7 @@ a.xref-missing::after { content: ""; }
 
 | 何にアクセスするか | 使う鍵・方法 | 使う手順 |
 |---|---|---|
-| Sensor Edge本体（ラズパイ、**自社内・同じLANにある間**） | **atLIB共通の管理用SSH鍵ペア**。秘密鍵ファイルを自分の作業端末の`~/.ssh/`（Windowsは`$env:USERPROFILE\.ssh\`）にあらかじめコピーしておく（ファイルの入手先は担当エンジニアに確認） | 手順1・手順3・「うまくいかない場合」 |
+| Sensor Edge本体（ラズパイ、**自社内・同じLANにある間**） | **TeraTerm＋atLIB共通の管理用SSH鍵ペア**（準備は手順0） | 手順1・手順3・「うまくいかない場合」 |
 | GCPの中継サーバー（`zabbix.atlib.jp`＝GCPインスタンス`zabbix-server`） | **gcloudコマンド**。自分のGoogleアカウントで`gcloud auth login`済みであれば、鍵の準備は不要（gcloudが自動で処理する） | 手順2・手順9・手順10 |
 | Sensor Edge本体（**発送後・顧客先に設置された状態**） | **Cloud IAPトンネル＋tinyproxy認証の2段階**。詳細は手順6 | 手順6・手順9・「うまくいかない場合」 |
 
@@ -398,22 +398,50 @@ a.xref-missing::after { content: ""; }
   - `Sensor Edge/運用手順書_ベースイメージ作成.md`で作成済みの最新のベースイメージ`.img`ファイル
 - 用意するメモ帳（作業中に出てくる値を一時的に控えるため。作業完了後は破棄する）
 
+初めてこの作業を担当する場合は、先に**手順0（初回準備）**を済ませておくこと。2回目以降は手順0は不要。
+
+---
+
+## 手順0: 初回準備（最初の1回だけ）
+
+### 使用ツールのインストール
+
+以下3つを作業端末（Windows機）にインストールする。いずれも既定のオプションのまま「次へ」を進めればよい。
+
+1. **Raspberry Pi Imager**: https://www.raspberrypi.com/software/ を開き、「Download for Windows」からインストーラーをダウンロードして実行する
+2. **Win32DiskImager**: https://sourceforge.net/projects/win32diskimager/ を開き、「Download」からインストーラーをダウンロードして実行する
+3. **TeraTerm**: https://github.com/TeraTermProject/teraterm/releases を開き、最新版の`teraterm-x.xx.exe`（インストーラー版）をダウンロードして実行する
+
+### atLIB共通のSSH秘密鍵の準備
+
+1. 担当エンジニアに、atLIB共通のSSH秘密鍵ファイル（Sensor Edge本体へのログイン専用）の入手方法を確認し、ファイルを受け取る
+2. 受け取った鍵ファイルを、作業端末の分かりやすい場所（例: `C:\Users\<自分のユーザー名>\keys\`フォルダを作って保存）に置く
+3. このファイルは手順1・手順3でTeraTermの「SSH認証」画面から毎回参照するので、パスを忘れないようにしておく（フォルダごと削除・移動しないこと）
+
+### Zabbix管理画面へのアクセス確認
+
+1. ブラウザで `https://zabbix-admin.atlib.jp/` を開く（あらかじめブックマークしておくと以降の作業が楽になる）
+2. Googleアカウントでのログインを求められるので、自分のGoogleアカウントでログインする
+3. ログインできない・権限がない場合は、担当エンジニアにアクセス権限の付与を依頼する
+4. ログインできることを確認できたら準備完了（実際の操作は手順5で行う）
+
 ---
 
 ## 手順1: ベースイメージをSDカードに複製する
 
-1. **操作**: Win32DiskImagerを起動する
-2. **操作**: 「Write」タブで、最新のベースイメージ`.img`ファイルを選ぶ
-3. **操作**: 新しいSDカードを書き込み先に選び、書き込みを実行する
-4. **操作**: SDカードを本体に挿し、Ethernetケーブルで社内LANに接続して起動する
-5. **操作**: ラズパイのIPアドレスを確認する（ルーターの管理画面のDHCPクライアント一覧から探す）
-6. **画面/コマンド**: 見つかったIPアドレスに向けて、以下のようにSSH接続する（**ベースイメージにatLIB共通の鍵が既に登録済みなので、鍵の再登録は不要**）
-   ```bash
-   ssh -i "<atLIB共通の秘密鍵のパス>" atladmin@<ラズパイのIPアドレス>
-   ```
-7. **確認**: パスワードを聞かれずにログインできること
-8. **操作**: `sudo rpi-eeprom-config --edit` を実行する。エディタが開くので、`BOOT_ORDER`の値を内蔵ストレージのみを使う設定に変更して保存する（**これはSDカードの複製には含まれないため、台ごとに必ず毎回実施すること**）
-9. **確認**: `ssh-keygen -l -f /etc/ssh/ssh_host_ed25519_key.pub` を実行し、他の台と違う指紋が表示されること（初回起動時に自動で新しい鍵が作られている証拠）
+1. Win32DiskImagerを起動し、SDカードに最新のベースイメージを書き込む
+   - 「Image File」欄横のフォルダアイコンをクリックし、最新のベースイメージ`.img`ファイルを選ぶ
+   - 「Device」欄で、挿入したSDカードのドライブレターを選ぶ（**他のディスクを選ぶと壊れるので、ドライブレター・容量が合っているか必ず確認**）
+   - 「Write」ボタンをクリックする
+   - 確認ダイアログが出たら「Yes」をクリックする
+   - プログレスバーが進み、完了メッセージが出るまで待つ
+2. SDカードを本体に挿し、Ethernetケーブルで社内LANに接続して起動する
+3. ラズパイのIPアドレス（ルーターのDHCPクライアント一覧、ホスト名`sensoredge-base`で探す）を確認し、TeraTermで接続する
+   - TeraTermを起動すると「新しい接続」ダイアログが開く（開かない場合はメニューの**ファイル > 新しい接続**）
+   - 「ホスト」欄にIPアドレスを入力し、「サービス」は「SSH」を選んで「OK」をクリックする
+   - 「SSH認証」画面が開いたら、「ユーザ名」欄に`atladmin`を入力する
+   - 「RSA/DSA/ECDSA/ED25519/EdDSA鍵を使う」を選び、横の「秘密鍵」欄の「…」ボタンをクリックしてatLIB共通の秘密鍵ファイルを選ぶ（**パスワードではログインできない**）
+   - 「OK」をクリックして接続する
 
 ---
 
@@ -438,8 +466,7 @@ a.xref-missing::after { content: ""; }
 
 ## 手順3: ラズパイ本体に設定を入れる
 
-1. **操作**: `Sensor Edge/kitting-script.sh` というファイルを開く
-2. **操作**: ファイル冒頭の7つの変数を書き換える
+1. `Sensor Edge/kitting-script.sh` を開き、冒頭の7つの変数を書き換える
 
    | 変数名 | 何を入れるか |
    |---|---|
@@ -451,20 +478,22 @@ a.xref-missing::after { content: ""; }
    | `TINYPROXY_USER` | 手順2でメモした`tinyproxy username` |
    | `TINYPROXY_PASS` | 手順2でメモした`tinyproxy password` |
 
-3. **画面/コマンド**: 対象のラズパイに、手順1の手順6と同じ方法でSSH接続する
-   ```bash
-   ssh -i "<atLIB共通の秘密鍵のパス>" atladmin@<ラズパイのIPアドレス>
-   ```
-4. **操作**: 書き換えたファイルを転送し、実行する
+2. 対象のラズパイに手順1と同じ方法でTeraTerm接続し、`kitting-script.sh`を送信する
+   - メニューの**ファイル > SSH SCP...**をクリックする
+   - 「SSH SCP」ダイアログの上段（送信/From側）の「…」ボタンをクリックし、書き換えた`kitting-script.sh`を選ぶ
+   - 「Send」ボタンをクリックする
+   - 転送完了のメッセージが出たら「OK」で閉じる
+   - ターミナル画面で`ls -la`を実行し、`kitting-script.sh`が届いていることを確認する
+3. 実行する
    ```bash
    chmod +x kitting-script.sh
    ./kitting-script.sh
    ```
-   **確認**: 変数の書き換え忘れがあれば、スクリプトがエラーで自動的に止まる（`__REPLACE_ME__`のままの箇所が残っているという意味なので、手順2に戻って値を確認する）
-5. **操作**: `ip -brief link` を実行し、**確認**: `eth0`（有線LAN）が`UP`になっていて、IPアドレスが振られていることを確認する。これを確認できたら `sudo reboot` を実行する（Wi-Fiは再起動と同時に使えなくなるため、必ず有線LANを先につないでおくこと）
-6. **確認**: 再起動後、有線LAN経由・鍵認証で再度SSHログインできること
-7. **確認**: スクリプト実行時の画面に表示された **Hostname** ・ **PSK Identity** ・ **PSK Key** ・ **tinyproxy BasicAuth username** の4つを必ずメモ帳に控える（手順5・6で使う）
-8. **確認**: 「Connected」というログが表示されること
+   （変数の書き換え忘れがあれば、`__REPLACE_ME__`が残っているとしてスクリプトが自動的に止まる。その場合は手順2に戻って値を確認する）
+4. `=== 【設定完了】===`に表示される **Hostname** ・ **PSK Identity** ・ **PSK Key** ・ **tinyproxy BasicAuth username** をメモ帳に控える（手順5・6で使う）
+5. `sudo rpi-eeprom-config --edit` で `BOOT_ORDER` を内蔵ストレージのみに変更して保存する（SDカードの複製には含まれないため、台ごとに毎回必要）
+6. `sudo reboot` する
+7. 再起動後、SSHで再接続する（ホスト鍵が変わったという警告が出るので、新しい鍵として承認する）。これでZabbix側の設定に進める
 
 ---
 
@@ -482,11 +511,12 @@ a.xref-missing::after { content: ""; }
    - **Proxy name**: 手順3でメモした `NEW_HOSTNAME` の値と**完全に同じ文字列**を入力する
    - **Proxy mode**: **Active** を選ぶ（Passiveは選ばない）
    - **Proxy group**: 何も選ばず空欄のままでよい
-4. **操作**: 「Encryption」タブに切り替え、以下を入力する
-   - **Connections to proxy**: `PSK` にチェックを入れる（`No encryption`のチェックは外す）
-   - **PSK identity**: 手順3でメモした `PSK Identity` の値
-   - **PSK value**: 手順3でメモした `PSK Key` の値（64文字の英数字）
-5. **操作**: 画面下の **Add** をクリックして保存する
+4. **操作**: 「Encryption」タブ（暗号化）に切り替え、以下を入力する
+   - 「Connections to proxy」の `PSK` にチェックを入れる（`No encryption`のチェックは外す）
+   - 「PSK」欄の **PSK変更** ボタンをクリックする
+   - 表示された **PSK identity** 欄に、手順3でメモした `PSK Identity` の値を入力する
+   - **PSK value** 欄に、手順3でメモした `PSK Key` の値（64文字の英数字）を入力する
+5. **操作**: 画面下の **Add**（新規作成時）または **更新**（既存プロキシのPSK再設定時）をクリックして保存する
 6. **確認**: 保存後、一覧画面で該当プロキシのステータスが数分以内に **「Available」**（緑色）に変わることを確認する
 7. **うまくいかない場合**: 「Unknown」のまま変わらない場合は、本ページの「うまくいかない場合」セクション、または詳細仕様書の手順9を参照する
 
@@ -2838,11 +2868,8 @@ Sensor Edge（顧客拠点設置のラズパイ）の資産情報（シリアル
    ./base-image-setup.sh
    ```
 3. エラーなく完了することを確認する（chiselのバージョン表示、各パッケージのインストールログ等が流れる）
-4. スクリプト完了後に表示される案内に従い、以下を手動で実施する
-   - **EEPROM設定はここでは触らない**（台ごとに個別対応のため。Part Bで説明）
-   - `sudo truncate -s 0 /etc/machine-id`
-   - `sudo rm -f /etc/ssh/ssh_host_*_key*`
-   - `sudo shutdown -h now`
+4. スクリプト完了後に表示される案内に従い、`sudo shutdown -h now`で電源を切る
+   - **EEPROM設定・SSHホスト鍵/machine-idの再生成・overlayrootの有効化は、ここでは一切行わない**（台ごとにPart Bの`kitting-script.sh`で実施する。2026-07-14の実機検証で、overlayrootを先に有効化すると、以降の全設定投入が再起動のたびに消えてしまう不具合が判明したため、この順序を厳守すること）
 
 ### A-3. Win32DiskImagerで`.img`化
 
@@ -2867,13 +2894,11 @@ Part Aを最初からやり直す。バージョン管理のため、`.img`フ�
 2. 新しいSDカードを書き込み先に選択し、書き込みを実行する
    - Raspberry Pi Imagerの「カスタムイメージを使用」機能でも同様に書き込み可能（どちらでもよい）
 
-### B-2. 初回起動・EEPROM設定
+### B-2. 初回起動
 
 1. 書き込んだSDカードを対象機に挿入し、Ethernet接続の上で起動する
 2. atLIBの管理用SSH秘密鍵でログインできることを確認する（ベースイメージに焼き込み済みのため、鍵の再登録は不要）
-3. **`sudo rpi-eeprom-config --edit`を実行し、`BOOT_ORDER`を内蔵ストレージ（SD/eMMC）のみに変更して保存する**
-   - EEPROM設定はラズパイ本体のオンボードチップに保存され、SDカードの複製には一切含まれない。**そのため、ベースイメージ化してもこの手順だけは毎回必須**であることに注意
-4. `ssh-keygen -l -f /etc/ssh/ssh_host_ed25519_key.pub`等で、SSHホスト鍵がベースイメージ作成時のものと異なる（＝初回起動時に正しく再生成された）ことを確認する
+   - この時点ではSSHホスト鍵はベースイメージ作成時のまま（複製直後はまだ全台共通）。B-3で台ごとに再生成する
 
 ### B-3. `kitting-script.sh`の実行
 
@@ -2886,8 +2911,12 @@ Part Aを最初からやり直す。バージョン管理のため、`.img`フ�
    chmod +x kitting-script.sh
    ./kitting-script.sh
    ```
+   このスクリプトの中で、chisel/tinyproxy/Zabbix Proxyの設定投入に続けて、SSHホスト鍵・machine-idの再生成（この台固有の値にする）、最後にoverlayrootの有効化を行う。**この順序が重要**（overlayroot有効化より前にすべての書き込みを終える必要がある）
 4. スクリプト末尾に表示される`Hostname`/`PSK Identity`/`PSK Key`/`tinyproxy BasicAuth username`をメモに保存する（Zabbix登録・起動batファイル作成で使用）
 5. `Connected`のログが出ることを確認する
+6. `ssh-keygen -l -f /etc/ssh/ssh_host_ed25519_key.pub`の表示が、ベースイメージ作成時と異なる（＝この台固有の鍵に再生成された）ことを確認する
+7. **`sudo rpi-eeprom-config --edit`を実行し、`BOOT_ORDER`を内蔵ストレージ（SD/eMMC）のみに変更して保存する**
+   - EEPROM設定はラズパイ本体のオンボードチップに保存され、SDカードの複製には一切含まれない。**そのため、ベースイメージ化してもこの手順だけは毎回必須**であることに注意
 
 ### B-4. 最終確認・reboot
 
@@ -2905,6 +2934,8 @@ Part Aを最初からやり直す。バージョン管理のため、`.img`フ�
 ## 変更履歴
 
 - 2026-07-13: 新規作成。chisel-client.serviceのExecStartハードコード不具合の発覚をきっかけに、真のゴールデンイメージ方式へ再設計。
+- 2026-07-14: 実機検証で、overlayrootをベースイメージ作成時に有効化すると`/etc`配下への書き込みが再起動のたびに消え、SSHホスト鍵の自動再生成もキッティングの設定投入も機能しなくなる不具合が判明。overlayrootの有効化とSSHホスト鍵/machine-idの再生成を、Part A（ベースイメージ作成）からPart B（`kitting-script.sh`、全設定投入後の最終ステップ）に移動。
+- 2026-07-14（同日追記）: Pi5パイロット機でPart A〜Bを最初から通しで実施し、上記の修正が正しく機能することを確認。あわせて以下4件の不備を発見し`base-image-setup.sh`に反映（すべて全台共通の値のため）：(1) `/var/lib/zabbix`ディレクトリが存在せず`DBName`も相対パスのままでSQLite DB作成に失敗、(2) `TLSConnect`/`TLSAccept`/`TLSPSKFile`がコメントアウトされたままでPSK暗号化が有効にならない、(3) `ssh.socket`と`ssh.service`が両方enabledでポート22を取り合い、`dpkg --configure -a`が失敗する、(4) `Server=127.0.0.1`のまま（`zabbix.atlib.jp`に固定する必要がある）。修正後、`atlib-proxy-01`としてZabbix管理画面でAvailable（オンライン）になることを確認済み。
 </script>
 
 <script>
