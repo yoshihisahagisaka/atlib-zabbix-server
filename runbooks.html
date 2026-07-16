@@ -363,7 +363,7 @@ a.xref-missing::after { content: ""; }
       <button class="theme-btn" id="themeToggle" type="button" aria-label="配色を切り替え">
         <span id="themeIcon">◐</span><span id="themeLabel">配色を切替</span>
       </button>
-      <p class="gen-note">上段「操作ガイド」は非技術者向けの実施手順、下段「運用仕様書」は詳細な技術背景です。文中の水色リンクをクリックすると該当箇所へ移動します。生成日: 2026-07-15</p>
+      <p class="gen-note">上段「操作ガイド」は非技術者向けの実施手順、下段「運用仕様書」は詳細な技術背景です。文中の水色リンクをクリックすると該当箇所へ移動します。生成日: 2026-07-16</p>
     </div>
   </nav>
   <main class="main" id="main"></main>
@@ -447,16 +447,19 @@ a.xref-missing::after { content: ""; }
 
 ## 手順2: GCPの中継サーバーで顧客用の受け口を作る
 
-1. **画面/コマンド**: 作業端末で以下を実行し、`zabbix.atlib.jp`（GCPインスタンス`zabbix-server`）にSSH接続する（自分のGoogleアカウントで`gcloud auth login`済みであれば、鍵の指定は不要）
-   ```bash
+この手順は、TeraTermではなく**Windowsの「PowerShell」**というアプリを使う（スタートメニューで検索して起動する）。
+
+1. **PowerShell**で以下を実行し、`zabbix-server`（GCPインスタンス）にSSH接続する
+   ```powershell
    gcloud compute ssh zabbix-server --zone=asia-northeast1-a
    ```
-2. **操作**: 以下をコピーして貼り付け、`<顧客ID>`の部分だけ実際の顧客ID（例: `customerB`）に書き換えてから実行する
+   自分のGoogleアカウントで`gcloud auth login`済みであれば、ID/PWや鍵の指定は不要（接続に失敗する場合は`gcloud auth login`を実行してから再試行する）。**接続に成功すると、画面の表示（プロンプト）が`zabbix-server`側のものに切り替わる**。ここから先の操作は、その切り替わった画面（`zabbix-server`の中）で行う。
+2. **（`zabbix-server`に接続した画面で）** 以下をコピーして貼り付け、`<顧客ID>`の部分だけ実際の顧客ID（例: `customerB`）に書き換えてから実行する
    ```bash
    sudo /etc/chisel/add_customer.sh <顧客ID>
    ```
-3. **確認**: 実行結果に `port` ・ `chisel username` ・ `chisel password` ・ `tinyproxy username` ・ `tinyproxy password` の5つの値が表示される。**この5つを必ずメモ帳に控える**（手順3・6で使う）
-4. **操作**: 続けて以下を実行し、設定を反映させる
+3. 実行結果に `port` ・ `chisel username` ・ `chisel password` ・ `tinyproxy username` ・ `tinyproxy password` の5つの値が表示される。**この5つを必ずメモ帳に控える**（手順3・6で使う）
+4. **（同じく`zabbix-server`に接続した画面で）** 続けて以下を実行し、設定を反映させる
    ```bash
    sudo systemctl restart chisel-server
    ```
@@ -569,16 +572,16 @@ a.xref-missing::after { content: ""; }
 
 顧客がラズパイを設置・起動したら、**GCPの中継サーバー側から**（顧客の機器へ直接は入れないため）確認する。
 
-1. **画面/コマンド**: 手順2と同じ方法で`zabbix.atlib.jp`にSSH接続する
-   ```bash
+1. **PowerShell**で手順2と同じ方法で`zabbix-server`にSSH接続する（画面が切り替わったら、以降は接続先の画面で操作する）
+   ```powershell
    gcloud compute ssh zabbix-server --zone=asia-northeast1-a
    ```
-2. **操作**: 以下を実行する（`<username>`は手順2でメモした値に置き換える）
+2. **（`zabbix-server`に接続した画面で）** 以下を実行する（`<username>`は手順2でメモした値に置き換える）
    ```bash
    sudo journalctl -u chisel-server --since "10 min ago" | grep <username>
    ```
    **確認**: それらしいログが出ていること
-3. **操作**: 以下を実行する（`<CHISEL_PORT>`は手順2でメモした値に置き換える）
+3. **（同じく`zabbix-server`に接続した画面で）** 以下を実行する（`<CHISEL_PORT>`は手順2でメモした値に置き換える）
    ```bash
    sudo ss -tlnp | grep :<CHISEL_PORT>
    ```
