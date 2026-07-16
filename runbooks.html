@@ -619,7 +619,7 @@ gcloud iam service-accounts add-iam-policy-binding 135863453696-compute@develope
 
 - [ ] パスワードでのログインが拒否される（鍵認証のみになっている）
 - [ ] `ip -brief link` を実行し、`wlan0`（Wi-Fi）が存在しない、または止まったままであることを確認した
-- [ ] シリアルコンソール・HDMI出力が無効化されている（手順3のブロックで実施済みのはず）
+- [ ] シリアルコンソール・HDMI出力が無効化されている（ベースイメージに焼き込み済みのため、手順1でSDカードに複製した時点で既に反映されているはず）
 - [ ] 封印シールを貼る準備ができている（手順8で実施）
 
 ---
@@ -628,7 +628,7 @@ gcloud iam service-accounts add-iam-policy-binding 135863453696-compute@develope
 
 1. **操作**: 本体のネジ・SDカードスロット周辺に、通し番号付きの改ざん検知シール（分解すると跡が残るタイプ）を貼る
 2. **画面**: 「Sensor Edge機器登録フォーム」を開く（リンクは`Sensor Edge/実施手順_機器管理システム.md`を参照）
-3. **操作**: デバイスのシリアル番号・製造番号（封印シールに記載した番号）・ホスト名・ユーザー名・SSH公開鍵識別子・発送日を入力し、顧客IDはプルダウンから選んで送信する（顧客名は自動的に記録される。手順1でメモした値がここで必要になる）
+3. **操作**: デバイスのシリアル番号・製造番号（封印シールに記載した番号）・ホスト名（手順3でメモした`NEW_HOSTNAME`の値）・ユーザー名・SSH公開鍵識別子・発送日を入力し、顧客IDはプルダウンから選んで送信する（顧客名は自動的に記録される）
 4. **確認**: 管理用スプレッドシートの「機器台帳」タブに、入力した内容の行が追加されていることを確認する
 5. **操作**: ラズパイ本体を顧客先へ発送する
 
@@ -666,11 +666,29 @@ gcloud iam service-accounts add-iam-policy-binding 135863453696-compute@develope
 - 封印シールの破損・改ざんを見つけた
 - 不正な持ち出し・転用の疑いがある
 
-**操作**:
-1. 手順2と同じ方法（`gcloud compute ssh zabbix-server --zone=asia-northeast1-a`）で`zabbix.atlib.jp`にSSH接続し、`customer_ledger.csv`の該当顧客の`username`/`password`を無効化する
-2. `/etc/chisel/users.json`から該当エントリを削除し、`sudo systemctl restart chisel-server`を実行する
-3. 機器がまだ手元にある、またはIAPトンネル経由でアクセスできる場合は、`/etc/tinyproxy/tinyproxy.conf`のBasicAuth行を削除・変更する
-4. Zabbix管理画面で該当プロキシを削除するか、PSKを再生成する（PSKローテーションの手順は`msp-frontend-server/実施手順_ZabbixProxy_PSKローテーション.md`を参照）
+**操作**（`<顧客ID>`はすべて実際の顧客IDに書き換える）:
+
+1. 手順2と同じ方法（`gcloud compute ssh zabbix-server --zone=asia-northeast1-a`）で`zabbix-server`にSSH接続する
+2. **（接続後の画面で）** 台帳の該当行を「無効」に記録する
+   ```bash
+   sudo nano /etc/chisel/customer_ledger.csv
+   ```
+   先頭が`<顧客ID>,`の行を探し、6列目の`active`を`revoked`に書き換えて保存する（`Ctrl+O` → Enter → `Ctrl+X`で保存して閉じる）
+   - **注意**: この台帳は記録用の一覧であり、この書き換えだけでは実際のアクセスは止まらない。実際に接続を遮断するのは次のステップ
+3. **（同じ画面で）** `/etc/chisel/users.json`から該当エントリを削除し、反映する
+   ```bash
+   sudo python3 << 'PYEOF'
+   import json
+   p = "/etc/chisel/users.json"
+   d = json.load(open(p))
+   d = {k: v for k, v in d.items() if not k.startswith("<顧客ID>-user:")}
+   json.dump(d, open(p, "w"), indent=2)
+   PYEOF
+   sudo systemctl restart chisel-server
+   ```
+   実行後、該当顧客のSensor Edgeはchisel-serverに再接続できなくなる（既存のトンネルも切れる）
+4. 機器がまだ手元にある、またはIAPトンネル経由でアクセスできる場合は、`/etc/tinyproxy/tinyproxy.conf`のBasicAuth行を削除・変更する
+5. Zabbix管理画面で該当プロキシを削除するか、PSKを再生成する（PSKローテーションの手順は`msp-frontend-server/実施手順_ZabbixProxy_PSKローテーション.md`を参照）
 
 この作業は顧客ごとに個別の認証情報になっているため、他のお客様には影響しない。
 
@@ -1364,7 +1382,7 @@ gcloud auth login
 それでも解決しない場合は担当エンジニアに連絡する。
 </script>
 <script type="text/plain" id="src-guide-device-mgmt">
-最終更新: 2026-07-12
+最終更新: 2026-07-16
 対応する詳細仕様書: `Sensor Edge/運用手順書_機器管理システム.md`（このページはシステム構築後の「日常の使い方」のみを扱う。スプレッドシート・フォームの新規作成手順は担当エンジニアが行う）
 
 ## これは何の作業か
@@ -1404,7 +1422,7 @@ Sensor Edge機器の情報（シリアル番号・製造番号等）・故障の
 2. **操作**: 以下を入力する
    - シリアル番号
    - 製造番号（封印シールに記載されている番号）
-   - ホスト名（手順3・手順4で設定した`NEW_HOSTNAME`の値）
+   - ホスト名（`実施手順_顧客追加フロー.md`手順3で設定した`NEW_HOSTNAME`の値）
    - ユーザー名
    - SSH公開鍵識別子（分からなければ空欄でよい）
    - 顧客ID（プルダウンから選ぶ。**顧客名は入力不要**、選んだ顧客IDから自動的に記録される）
