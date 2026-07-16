@@ -389,7 +389,7 @@ a.xref-missing::after { content: ""; }
 | 何にアクセスするか | 使う鍵・方法 | 使う手順 |
 |---|---|---|
 | Sensor Edge本体（ラズパイ、**自社内・同じLANにある間**） | **TeraTerm＋atLIB共通の管理用SSH鍵ペア**（準備は手順0） | 手順1・手順3・「うまくいかない場合」 |
-| GCPの中継サーバー（`zabbix.atlib.jp`＝GCPインスタンス`zabbix-server`） | **gcloudコマンド**。自分のGoogleアカウントで`gcloud auth login`済みであれば、鍵の準備は不要（gcloudが自動で処理する） | 手順2・手順9・手順10 |
+| GCPの中継サーバー（`zabbix.atlib.jp`＝GCPインスタンス`zabbix-server`） | **gcloudコマンド（`--tunnel-through-iap`必須）**。自分のGoogleアカウントで`gcloud auth login`済みであれば、鍵の準備は不要（gcloudが自動で処理する） | 手順2・手順9・手順10 |
 | Sensor Edge本体（**発送後・顧客先に設置された状態**） | **Cloud IAPトンネル＋tinyproxy認証の2段階**。詳細は手順6 | 手順6・手順9・「うまくいかない場合」 |
 
 - 以下がそろっていること（無ければ担当エンジニアに確認）
@@ -420,6 +420,8 @@ a.xref-missing::after { content: ""; }
 
 以降、この手順書で「PowerShellで実行する」と書かれている`gcloud`コマンドはすべて、**通常のPowerShellではなく「Google Cloud SDK Shell」を使う**こと。
 
+- **2026-07-16より、`zabbix-server`へのSSHは`--tunnel-through-iap`オプションを付けたコマンドでのみ接続できる**（外部IPへの直接SSHはセキュリティ強化のため遮断済み）。本ページの`gcloud compute ssh`コマンドには最初からこのオプションが入っているので、コマンドはそのままコピーして使えばよい（オプションを消さないこと）
+
 - **Windowsのスタートメニューを開き、「Google Cloud SDK Shell」を検索して起動する**（Google Cloud SDKインストール時に自動的に作成されるアプリ。黒い画面のコマンドプロンプト）
 - これを使う理由: 通常のPowerShellで`gcloud`を実行すると、PCの設定（実行ポリシー）によっては下記のようなエラーで弾かれることがある。「Google Cloud SDK Shell」はこの問題が起きない構成になっている
   ```
@@ -441,7 +443,7 @@ a.xref-missing::after { content: ""; }
    ```
 3. 動作確認として、手順2の接続コマンドを試す
    ```
-   gcloud compute ssh zabbix-server --zone=asia-northeast1-a
+   gcloud compute ssh zabbix-server --zone=asia-northeast1-a --tunnel-through-iap
    ```
    接続できれば準備完了（`exit`で抜ける）。権限エラーが出る場合は、下記「【権限のある担当者向け】新規メンバーへのGCP権限付与」を担当エンジニアに依頼する
 
@@ -463,7 +465,7 @@ gcloud iam service-accounts add-iam-policy-binding 135863453696-compute@develope
 ```
 
 - 1つ目・2つ目はプロジェクト全体への権限付与、3つ目は`zabbix-server`にアタッチされたデフォルトサービスアカウント1つに限定した権限付与（プロジェクト全体には影響しない）
-- 実行後、反映まで数十秒〜数分かかることがある。新しいメンバーには少し待ってから`gcloud compute ssh zabbix-server --zone=asia-northeast1-a`を再試行してもらう
+- 実行後、反映まで数十秒〜数分かかることがある。新しいメンバーには少し待ってから`gcloud compute ssh zabbix-server --zone=asia-northeast1-a --tunnel-through-iap`を再試行してもらう
 - Zabbix管理画面（`https://zabbix-admin.atlib.jp/`）へのアクセスは別枠で、Googleグループ`msp-staff@atlib.jp`のメンバーであれば自動的に権限があるため、通常は追加対応不要（グループに入っていない場合はグループへの追加を依頼する）
 
 ### atLIB共通のSSH秘密鍵の準備
@@ -505,7 +507,7 @@ gcloud iam service-accounts add-iam-policy-binding 135863453696-compute@develope
 
 | 項番 | 実施内容 | コマンド |
 |---|---|---|
-| 2-1 | `zabbix-server`にSSH接続する | `gcloud compute ssh zabbix-server --zone=asia-northeast1-a` |
+| 2-1 | `zabbix-server`にSSH接続する | `gcloud compute ssh zabbix-server --zone=asia-northeast1-a --tunnel-through-iap` |
 | 2-2 | （接続後・`zabbix-server`側の画面で）顧客用の認証情報を払い出す。`<顧客ID>`は実際の顧客ID（例: `customerB`）に書き換える | `sudo /etc/chisel/add_customer.sh <顧客ID>` |
 | 2-3 | 表示された5つの値を下の表に控える（手順3・6で使う） | — |
 | 2-4 | （同じく`zabbix-server`側の画面で）新しい認証情報を反映する | `sudo systemctl restart chisel-server` |
@@ -640,7 +642,7 @@ gcloud iam service-accounts add-iam-policy-binding 135863453696-compute@develope
 
 1. **Google Cloud SDK Shell**で手順2と同じ方法で`zabbix-server`にSSH接続する（画面が切り替わったら、以降は接続先の画面で操作する。エラーが出た場合は手順2の「エラーが出た場合」を参照）
    ```
-   gcloud compute ssh zabbix-server --zone=asia-northeast1-a
+   gcloud compute ssh zabbix-server --zone=asia-northeast1-a --tunnel-through-iap
    ```
 2. **（`zabbix-server`に接続した画面で）** 以下を実行する（`<username>`は手順2でメモした値に置き換える）
    ```bash
@@ -668,7 +670,7 @@ gcloud iam service-accounts add-iam-policy-binding 135863453696-compute@develope
 
 **操作**（`<顧客ID>`はすべて実際の顧客IDに書き換える）:
 
-1. 手順2と同じ方法（`gcloud compute ssh zabbix-server --zone=asia-northeast1-a`）で`zabbix-server`にSSH接続する
+1. 手順2と同じ方法（`gcloud compute ssh zabbix-server --zone=asia-northeast1-a --tunnel-through-iap`）で`zabbix-server`にSSH接続する
 2. **（接続後の画面で）** 台帳の該当行を「無効」に記録する
    ```bash
    sudo nano /etc/chisel/customer_ledger.csv
