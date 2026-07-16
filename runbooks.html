@@ -503,26 +503,33 @@ gcloud iam service-accounts add-iam-policy-binding 135863453696-compute@develope
 
 この手順は、TeraTermではなく**「Google Cloud SDK Shell」**というアプリを使う（スタートメニューで検索して起動する。手順0参照）。
 
-1. **Google Cloud SDK Shell**で以下を実行し、`zabbix-server`（GCPインスタンス）にSSH接続する
-   ```
-   gcloud compute ssh zabbix-server --zone=asia-northeast1-a
-   ```
-   自分のGoogleアカウントで`gcloud auth login`済みであれば、ID/PWや鍵の指定は不要。**接続に成功すると、画面の表示（プロンプト）が`zabbix-server`側のものに切り替わる**。ここから先の操作は、その切り替わった画面（`zabbix-server`の中）で行う。
+| 項番 | 実施内容 | コマンド |
+|---|---|---|
+| 2-1 | `zabbix-server`にSSH接続する | `gcloud compute ssh zabbix-server --zone=asia-northeast1-a` |
+| 2-2 | （接続後・`zabbix-server`側の画面で）顧客用の認証情報を払い出す。`<顧客ID>`は実際の顧客ID（例: `customerB`）に書き換える | `sudo /etc/chisel/add_customer.sh <顧客ID>` |
+| 2-3 | 表示された5つの値を下の表に控える（手順3・6で使う） | — |
+| 2-4 | （同じく`zabbix-server`側の画面で）新しい認証情報を反映する | `sudo systemctl restart chisel-server` |
 
-   **エラーが出た場合**:
-   - `このシステムではスクリプトの実行が無効になっているため...` → 通常のPowerShellで実行してしまっている。「Google Cloud SDK Shell」に切り替えて実行し直す
-   - `The required property [project] is not currently set` → `gcloud config set project msp-zabbix` を実行してから、もう一度上記のコマンドを実行する
-   - それ以外の認証エラー → `gcloud auth login` を実行してから再試行する
-2. **（`zabbix-server`に接続した画面で）** 以下をコピーして貼り付け、`<顧客ID>`の部分だけ実際の顧客ID（例: `customerB`）に書き換えてから実行する
-   ```bash
-   sudo /etc/chisel/add_customer.sh <顧客ID>
-   ```
-3. 実行結果に `port` ・ `chisel username` ・ `chisel password` ・ `tinyproxy username` ・ `tinyproxy password` の5つの値が表示される。**この5つを必ずメモ帳に控える**（手順3・6で使う）
-4. **（同じく`zabbix-server`に接続した画面で）** 続けて以下を実行し、設定を反映させる
-   ```bash
-   sudo systemctl restart chisel-server
-   ```
-5. **注意**: この再起動で、既存の他のお客様が一瞬（約1秒）切断→自動で再接続する。深夜など影響が少ない時間帯に行うのが望ましい
+- 2-1について: 自分のGoogleアカウントで`gcloud auth login`済みであれば、ID/PWや鍵の指定は不要。**接続に成功すると、画面の表示（プロンプト）が`zabbix-server`側のものに切り替わる**。2-2以降はその切り替わった画面の中で操作する
+- 2-2のコマンドをコピーする際は、**コードブロックの内容だけを選択する**（左上に薄く表示される`BASH`という言語ラベルは選択に含めない）。ラベルまで一緒にコピーしてしまうと `bash sudo /etc/chisel/add_customer.sh ...` のような誤ったコマンドになり、`cannot execute binary file`というエラーになる
+- 2-4について: この再起動で、既存の他のお客様が一瞬（約1秒）切断→自動で再接続する。深夜など影響が少ない時間帯に行うのが望ましい
+
+**2-3で控える値**（`add_customer.sh`の出力をそのまま転記する）:
+
+| 項目 | 値 |
+|---|---|
+| port | |
+| chisel username | |
+| chisel password | |
+| tinyproxy username | |
+| tinyproxy password | |
+
+**エラーが出た場合**:
+- `このシステムではスクリプトの実行が無効になっているため...` → 通常のPowerShellで実行してしまっている。「Google Cloud SDK Shell」に切り替えて実行し直す
+- `The required property [project] is not currently set` → `gcloud config set project msp-zabbix` を実行してから、もう一度上記のコマンドを実行する
+- `Required 'compute.instances.get' permission...` または `does not have access to service account...` → 自分のGoogleアカウントにこのプロジェクトへのIAM権限がまだ付与されていない。担当エンジニアに、本ページ手順0「【権限のある担当者向け】新規メンバーへのGCP権限付与」の実施を依頼する
+- それ以外の認証エラー → `gcloud auth login` を実行してから再試行する
+- `add_customer.sh`の実行結果に **tinyproxy username / tinyproxy password が表示されない**場合 → `zabbix-server`上の`/etc/chisel/add_customer.sh`が古いバージョンのままである可能性が高い（2026-07-16に実際に発生）。作業を止めて担当エンジニアに連絡する（`chisel username`しか払い出されていない状態でそのまま手順3に進んではいけない）
 
 ---
 
