@@ -370,7 +370,7 @@ a.xref-missing::after { content: ""; }
 </div>
 
 <script type="text/plain" id="src-guide-sensor-edge">
-最終更新: 2026-07-15
+最終更新: 2026-07-16
 対応する詳細仕様書: `Sensor Edge/運用手順書_顧客追加フロー.md`（用語の意味や「なぜこうなっているか」はそちらを参照。本ページは「何をどう操作するか」だけに絞っている）
 ベースイメージの作り方: `Sensor Edge/運用手順書_ベースイメージ作成.md`
 機器登録フォームの使い方: `Sensor Edge/実施手順_機器管理システム.md`
@@ -442,7 +442,28 @@ a.xref-missing::after { content: ""; }
    ```
    gcloud compute ssh zabbix-server --zone=asia-northeast1-a
    ```
-   接続できれば準備完了（`exit`で抜ける）。権限エラーが出る場合は、担当エンジニアに自分のGoogleアカウントへのIAPアクセス権限付与を依頼する
+   接続できれば準備完了（`exit`で抜ける）。権限エラーが出る場合は、下記「【権限のある担当者向け】新規メンバーへのGCP権限付与」を担当エンジニアに依頼する
+
+### 【権限のある担当者向け】新規メンバーへのGCP権限付与（新しいメンバーごとに1回だけ）
+
+このセクションは、新しいメンバー本人ではなく、**`msp-zabbix`プロジェクトのオーナー権限を持つ担当者**（2026-07時点では佳寿）が実施する。新しいメンバーが上記「動作確認」で権限エラーに遭遇した場合、以下のいずれかのエラーが出る。
+
+- `Required 'compute.instances.get' permission for '...instances/zabbix-server'` （IAM権限そのものが無い）
+- `Could not add SSH key to instance metadata ... does not have access to service account '...-compute@developer.gserviceaccount.com'` （SSH公開鍵の自動登録に必要な追加権限が無い）
+
+**対応**: 「Google Cloud SDK Shell」（担当者自身の端末）で、以下3つのコマンドを実行する（`<新しいメンバーのメールアドレス>`を実際のアドレスに置き換える）。
+
+```
+gcloud projects add-iam-policy-binding msp-zabbix --member="user:<新しいメンバーのメールアドレス>" --role="roles/compute.instanceAdmin.v1"
+
+gcloud projects add-iam-policy-binding msp-zabbix --member="user:<新しいメンバーのメールアドレス>" --role="roles/iap.tunnelResourceAccessor"
+
+gcloud iam service-accounts add-iam-policy-binding 135863453696-compute@developer.gserviceaccount.com --project=msp-zabbix --member="user:<新しいメンバーのメールアドレス>" --role="roles/iam.serviceAccountUser"
+```
+
+- 1つ目・2つ目はプロジェクト全体への権限付与、3つ目は`zabbix-server`にアタッチされたデフォルトサービスアカウント1つに限定した権限付与（プロジェクト全体には影響しない）
+- 実行後、反映まで数十秒〜数分かかることがある。新しいメンバーには少し待ってから`gcloud compute ssh zabbix-server --zone=asia-northeast1-a`を再試行してもらう
+- Zabbix管理画面（`https://zabbix-admin.atlib.jp/`）へのアクセスは別枠で、Googleグループ`msp-staff@atlib.jp`のメンバーであれば自動的に権限があるため、通常は追加対応不要（グループに入っていない場合はグループへの追加を依頼する）
 
 ### atLIB共通のSSH秘密鍵の準備
 
