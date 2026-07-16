@@ -411,6 +411,27 @@ a.xref-missing::after { content: ""; }
 1. **Raspberry Pi Imager**: https://www.raspberrypi.com/software/ を開き、「Download for Windows」からインストーラーをダウンロードして実行する
 2. **Win32DiskImager**: https://sourceforge.net/projects/win32diskimager/ を開き、「Download」からインストーラーをダウンロードして実行する
 3. **TeraTerm**: https://github.com/TeraTermProject/teraterm/releases を開き、最新版の`teraterm-x.xx.exe`（インストーラー版）をダウンロードして実行する
+4. **Google Cloud SDK**（手順2・9・10で`zabbix-server`にSSH接続するために必要）
+   - https://cloud.google.com/sdk/docs/install を開き、Windows用インストーラー（`GoogleCloudSDKInstaller.exe`）をダウンロードして実行する
+   - インストールは既定のオプションのまま進める（最後の画面で「gcloud initを起動する」にチェックが入っていればそのままでよい）
+   - インストール完了後、開いていたPowerShellをすべて閉じて、新しく開き直す（PATHを反映させるため）
+   - 「Google Cloud SDK Shell」という専用アプリは不要。通常のPowerShellでそのまま使える
+
+### Google Cloud SDKの初期設定（初回のみ）
+
+1. PowerShellで以下を実行し、ブラウザで自分のGoogleアカウントにログインする
+   ```powershell
+   gcloud auth login
+   ```
+2. 続けてプロジェクトを設定する
+   ```powershell
+   gcloud config set project msp-zabbix
+   ```
+3. 動作確認として、手順2の接続コマンドを試す
+   ```powershell
+   gcloud compute ssh zabbix-server --zone=asia-northeast1-a
+   ```
+   接続できれば準備完了（`exit`で抜ける）。権限エラーが出る場合は、担当エンジニアに自分のGoogleアカウントへのIAPアクセス権限付与を依頼する
 
 ### atLIB共通のSSH秘密鍵の準備
 
