@@ -413,22 +413,33 @@ a.xref-missing::after { content: ""; }
 3. **TeraTerm**: https://github.com/TeraTermProject/teraterm/releases を開き、最新版の`teraterm-x.xx.exe`（インストーラー版）をダウンロードして実行する
 4. **Google Cloud SDK**（手順2・9・10で`zabbix-server`にSSH接続するために必要）
    - https://cloud.google.com/sdk/docs/install を開き、Windows用インストーラー（`GoogleCloudSDKInstaller.exe`）をダウンロードして実行する
-   - インストールは既定のオプションのまま進める（最後の画面で「gcloud initを起動する」にチェックが入っていればそのままでよい）
-   - インストール完了後、開いていたPowerShellをすべて閉じて、新しく開き直す（PATHを反映させるため）
-   - 「Google Cloud SDK Shell」という専用アプリは不要。通常のPowerShellでそのまま使える
+   - インストールは既定のオプションのまま進める（最後の画面で「Start Google Cloud SDK Shell」「gcloud initを起動する」等のチェックが入っていればそのままでよい）
+
+### gcloudコマンドの実行手順（手順2・9・10で毎回使う）
+
+以降、この手順書で「PowerShellで実行する」と書かれている`gcloud`コマンドはすべて、**通常のPowerShellではなく「Google Cloud SDK Shell」を使う**こと。
+
+- **Windowsのスタートメニューを開き、「Google Cloud SDK Shell」を検索して起動する**（Google Cloud SDKインストール時に自動的に作成されるアプリ。黒い画面のコマンドプロンプト）
+- これを使う理由: 通常のPowerShellで`gcloud`を実行すると、PCの設定（実行ポリシー）によっては下記のようなエラーで弾かれることがある。「Google Cloud SDK Shell」はこの問題が起きない構成になっている
+  ```
+  このシステムではスクリプトの実行が無効になっているため、ファイル ...\gcloud.ps1 を読み込むことができません。
+  ```
+  **このエラーが出た場合**: 「Google Cloud SDK Shell」に切り替えて同じコマンドを実行し直せば解決する（PowerShellを直さなくてよい）
 
 ### Google Cloud SDKの初期設定（初回のみ）
 
-1. PowerShellで以下を実行し、ブラウザで自分のGoogleアカウントにログインする
-   ```powershell
+「Google Cloud SDK Shell」を起動し、以下を順番に実行する。
+
+1. ブラウザで自分のGoogleアカウントにログインする
+   ```
    gcloud auth login
    ```
-2. 続けてプロジェクトを設定する
-   ```powershell
+2. 続けてプロジェクトを設定する（**これを忘れると手順2で`The required property [project] is not currently set`というエラーになる**）
+   ```
    gcloud config set project msp-zabbix
    ```
 3. 動作確認として、手順2の接続コマンドを試す
-   ```powershell
+   ```
    gcloud compute ssh zabbix-server --zone=asia-northeast1-a
    ```
    接続できれば準備完了（`exit`で抜ける）。権限エラーが出る場合は、担当エンジニアに自分のGoogleアカウントへのIAPアクセス権限付与を依頼する
@@ -468,13 +479,18 @@ a.xref-missing::after { content: ""; }
 
 ## 手順2: GCPの中継サーバーで顧客用の受け口を作る
 
-この手順は、TeraTermではなく**Windowsの「PowerShell」**というアプリを使う（スタートメニューで検索して起動する）。
+この手順は、TeraTermではなく**「Google Cloud SDK Shell」**というアプリを使う（スタートメニューで検索して起動する。手順0参照）。
 
-1. **PowerShell**で以下を実行し、`zabbix-server`（GCPインスタンス）にSSH接続する
-   ```powershell
+1. **Google Cloud SDK Shell**で以下を実行し、`zabbix-server`（GCPインスタンス）にSSH接続する
+   ```
    gcloud compute ssh zabbix-server --zone=asia-northeast1-a
    ```
-   自分のGoogleアカウントで`gcloud auth login`済みであれば、ID/PWや鍵の指定は不要（接続に失敗する場合は`gcloud auth login`を実行してから再試行する）。**接続に成功すると、画面の表示（プロンプト）が`zabbix-server`側のものに切り替わる**。ここから先の操作は、その切り替わった画面（`zabbix-server`の中）で行う。
+   自分のGoogleアカウントで`gcloud auth login`済みであれば、ID/PWや鍵の指定は不要。**接続に成功すると、画面の表示（プロンプト）が`zabbix-server`側のものに切り替わる**。ここから先の操作は、その切り替わった画面（`zabbix-server`の中）で行う。
+
+   **エラーが出た場合**:
+   - `このシステムではスクリプトの実行が無効になっているため...` → 通常のPowerShellで実行してしまっている。「Google Cloud SDK Shell」に切り替えて実行し直す
+   - `The required property [project] is not currently set` → `gcloud config set project msp-zabbix` を実行してから、もう一度上記のコマンドを実行する
+   - それ以外の認証エラー → `gcloud auth login` を実行してから再試行する
 2. **（`zabbix-server`に接続した画面で）** 以下をコピーして貼り付け、`<顧客ID>`の部分だけ実際の顧客ID（例: `customerB`）に書き換えてから実行する
    ```bash
    sudo /etc/chisel/add_customer.sh <顧客ID>
@@ -593,8 +609,8 @@ a.xref-missing::after { content: ""; }
 
 顧客がラズパイを設置・起動したら、**GCPの中継サーバー側から**（顧客の機器へ直接は入れないため）確認する。
 
-1. **PowerShell**で手順2と同じ方法で`zabbix-server`にSSH接続する（画面が切り替わったら、以降は接続先の画面で操作する）
-   ```powershell
+1. **Google Cloud SDK Shell**で手順2と同じ方法で`zabbix-server`にSSH接続する（画面が切り替わったら、以降は接続先の画面で操作する。エラーが出た場合は手順2の「エラーが出た場合」を参照）
+   ```
    gcloud compute ssh zabbix-server --zone=asia-northeast1-a
    ```
 2. **（`zabbix-server`に接続した画面で）** 以下を実行する（`<username>`は手順2でメモした値に置き換える）
