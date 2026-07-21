@@ -676,20 +676,19 @@ Sensor Edge本体にブラウザではなくSSHで入りたい場合は、Chrome
    ```
    gcloud compute ssh zabbix-server --zone=asia-northeast1-a --tunnel-through-iap
    ```
-2. **（`zabbix-server`に接続した画面で）** 以下を実行する（`<CHISEL_PORT>`は手順2でメモした値に置き換える）
-   ```bash
-   sudo journalctl -u chisel-server --since "10 min ago" | grep "R:<CHISEL_PORT>"
-   ```
-   **確認**: 以下のような行が表示されること（`session#`の番号・時刻は毎回変わるが、`R:<CHISEL_PORT>=>8888: Listening`の部分が一致していればよい）
-   ```
-   2026/07/20 23:18:03 server: session#19: tun: proxy#R:20002=>8888: Listening
-   ```
-   何も表示されない場合は、顧客先のSensor Edgeがまだ接続できていない（Sensor Edge側の設置・起動、またはchisel-client側の認証情報を確認する）
-3. **（同じく`zabbix-server`に接続した画面で）** 以下を実行する（`<CHISEL_PORT>`は手順2でメモした値に置き換える）
+2. **（`zabbix-server`に接続した画面で）** 以下を実行する（`<CHISEL_PORT>`は手順2でメモした値に置き換える）。**これが最も確実な確認方法**
    ```bash
    sudo ss -tlnp | grep :<CHISEL_PORT>
    ```
-   **確認**: 何か表示されること（ポートが実際に使われている）
+   **確認**: `LISTEN`と`chisel`のプロセスが表示されること（何も表示されない場合は接続できていない）
+3. **（同じく`zabbix-server`に接続した画面で・任意）** 直近に（再）接続したタイミングを確認したい場合は以下を実行する
+   ```bash
+   sudo journalctl -u chisel-server --since "10 min ago" | grep "R:<CHISEL_PORT>"
+   ```
+   **注意**: chiselは接続が確立した瞬間だけログを1行出力し、その後接続が安定して継続していても新しいログは出ない。**すでに接続済みの機器では、この10分以内のログチェックには何も表示されないのが正常**（異常ではない）。接続状況の確認は手順2（`ss`コマンド）を優先する。ヒットする場合の行の例:
+   ```
+   2026/07/20 23:18:03 server: session#19: tun: proxy#R:20002=>8888: Listening
+   ```
 4. **画面**: Zabbix管理画面の **Administration > Proxies** で、該当プロキシが **「Available」** になっていることを確認する
 5. **操作**: 起動batファイルを実際にダブルクリックし（IAPトンネルは自動で起動する）、ブラウザで顧客先の機器の管理画面が表示されることを確認する
 6. これが確認できたら作業完了
@@ -1756,13 +1755,14 @@ PuTTYの設定（**Connection > Proxyの認証情報と、SSHログイン認証�
 顧客がラズパイを設置・起動したら、**GCPリレーサーバー側から**以下で確認できる（顧客のSensor Edgeへ直接SSHできない前提）。
 
 ```bash
-# 1. Chiselサーバーが該当ポートのリバーストンネルを張れているか
-# （chiselのログにusernameは出力されないため、portでgrepする。
-#   ヒットする行の例: server: session#19: tun: proxy#R:20002=>8888: Listening）
-sudo journalctl -u chisel-server --since "10 min ago" | grep "R:<CHISEL_PORT>"
-
-# 2. 該当ポートで実際にリバース転送が張られているか
+# 1. 該当ポートで実際にリバース転送が張られているか（最も確実な確認方法）
 sudo ss -tlnp | grep :<CHISEL_PORT>
+
+# 2. （任意）直近の（再）接続タイミングを確認したい場合。chiselは接続確立の瞬間だけログを
+#    1行出力し、以降は安定接続が続いても新しいログを出さないため、すでに接続済みの機器では
+#    このコマンドが空振り（no output）になるのが正常。ヒットする行の例:
+#    server: session#19: tun: proxy#R:20002=>8888: Listening
+sudo journalctl -u chisel-server --since "10 min ago" | grep "R:<CHISEL_PORT>"
 ```
 
 あわせて、Zabbix Server側で該当プロキシが「使用可能(Available)」表示になっているかを確認する（これはChiselトンネルとは独立した、Zabbix Proxy→Zabbix Serverの疎通確認になる）。
