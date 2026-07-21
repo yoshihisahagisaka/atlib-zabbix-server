@@ -371,7 +371,7 @@ a.xref-missing::after { content: ""; }
 </div>
 
 <script type="text/plain" id="src-guide-sensor-edge">
-最終更新: 2026-07-16
+最終更新: 2026-07-21
 対応する詳細仕様書: `Sensor Edge/運用手順書_顧客追加フロー.md`（用語の意味や「なぜこうなっているか」はそちらを参照。本ページは「何をどう操作するか」だけに絞っている）
 ベースイメージの作り方: `Sensor Edge/運用手順書_ベースイメージ作成.md`
 機器登録フォームの使い方: `Sensor Edge/実施手順_機器管理システム.md`
@@ -397,7 +397,7 @@ a.xref-missing::after { content: ""; }
   - Zabbix管理画面（`https://zabbix-admin.atlib.jp/`）にログインできるGoogleアカウント
   - 発送する新品のラズパイ本体（または使い回すSDカード）
   - `Sensor Edge/運用手順書_ベースイメージ作成.md`で作成済みの最新のベースイメージ`.img`ファイル
-- 用意するメモ帳（作業中に出てくる値を一時的に控えるため。作業完了後は破棄する）
+- **[Sensor Edge 機器管理台帳](https://docs.google.com/spreadsheets/d/1x5dtPGwh-AqJamPmKA8TTj40D9noYWancf7WipK5I4E/edit)の「顧客追加ワークシート」タブを開いておく**（2026-07-21〜。作業中に出てくる値はメモ帳ではなくこのタブの該当行に貼り付ける。投入コマンドの多くが自動生成され、`NEW_HOSTNAME`等の手打ちミスも自動チェックされる）
 
 初めてこの作業を担当する場合は、先に**手順0（初回準備）**を済ませておくこと。2回目以降は手順0は不要。
 
@@ -512,28 +512,20 @@ gcloud iam service-accounts add-iam-policy-binding 135863453696-compute@develope
 
 この手順は、TeraTermではなく**「Google Cloud SDK Shell」**というアプリを使う（スタートメニューで検索して起動する。手順0参照）。
 
+0. **（事前）** 「顧客追加ワークシート」タブに新しい行を追加し、**顧客ID・NEW_HOSTNAME（自分で決める。例: `atlib-proxy-02`）・NEW_PSK_ID（自分で決める。例: `PSK-CUSTOMER-02`）**を入力する
+
 | 項番 | 実施内容 | コマンド |
 |---|---|---|
 | 2-1 | `zabbix-server`にSSH接続する | `gcloud compute ssh zabbix-server --zone=asia-northeast1-a --tunnel-through-iap` |
-| 2-2 | （接続後・`zabbix-server`側の画面で）顧客用の認証情報を払い出す。`<顧客ID>`は実際の顧客ID（例: `customerB`）に書き換える | `sudo /etc/chisel/add_customer.sh <顧客ID>` |
-| 2-3 | 表示された5つの値を下の表に控える（手順3・6で使う） | — |
+| 2-2 | （接続後・`zabbix-server`側の画面で）顧客用の認証情報を払い出す | ワークシートの**「【手順2-2】add_customer.sh実行コマンド」列**（H列）に自動生成されているコマンドをそのままコピーして実行する |
+| 2-3 | 表示された5つの値をワークシートの**port〜tinyproxy_password列（I〜M列）**に貼り付ける | — |
 | 2-4 | （同じく`zabbix-server`側の画面で）新しい認証情報を反映する | `sudo systemctl restart chisel-server` |
 
 - 2-1について: 自分のGoogleアカウントで`gcloud auth login`済みであれば、ID/PWや鍵の指定は不要。**接続に成功すると、画面の表示（プロンプト）が`zabbix-server`側のものに切り替わる**。2-2以降はその切り替わった画面の中で操作する
-- 2-2のコマンドをコピーする際は、**コードブロックの内容だけを選択する**（左上に薄く表示される`BASH`という言語ラベルは選択に含めない）。ラベルまで一緒にコピーしてしまうと `bash sudo /etc/chisel/add_customer.sh ...` のような誤ったコマンドになり、`cannot execute binary file`というエラーになる
+- 2-2について: ワークシートのセルからコピーするので、コードブロックの言語ラベルを巻き込むコピペ事故（`bash sudo ...`のような誤ったコマンドになる問題）は起きない
 - 2-4について: この再起動で、既存の他のお客様が一瞬（約1秒）切断→自動で再接続する。深夜など影響が少ない時間帯に行うのが望ましい
 
-**2-3で控える値**（`add_customer.sh`の出力をそのまま転記する）:
-
-| 項目 | 値 |
-|---|---|
-| port | |
-| chisel username | |
-| chisel password | |
-| tinyproxy username | |
-| tinyproxy password | |
-
-**tinyproxy username / tinyproxy passwordは、この後1Passwordの「pj-infra vision」保管庫に保存する**（顧客IDが分かる名前で登録、例: `InfraVision - atlse000001`）。手順6でリモートアクセスするたびに毎回参照するための恒久保存で、batファイルには書き込まない。`chisel username` / `chisel password`は手順3でのみ使うため、1Passwordへの保存は不要（メモ帳の控えは作業完了後に破棄してよい）。
+**tinyproxy username / tinyproxy passwordは、この後1Passwordの「pj-infra vision」保管庫に保存する**（ワークシートの**「1Password登録タイトル」列（O列）**にタイトルが自動生成されている）。手順6でリモートアクセスするたびに毎回参照するための恒久保存で、batファイルには書き込まない。`chisel username` / `chisel password`は手順3でのみ使うため、1Passwordへの保存は不要（1Password登録・手順3完了後は、ワークシートのI〜M列を消去してよい）。
 
 **エラーが出た場合**:
 - `このシステムではスクリプトの実行が無効になっているため...` → 通常のPowerShellで実行してしまっている。「Google Cloud SDK Shell」に切り替えて実行し直す
@@ -546,17 +538,7 @@ gcloud iam service-accounts add-iam-policy-binding 135863453696-compute@develope
 
 ## 手順3: ラズパイ本体に設定を入れる
 
-1. `Sensor Edge/kitting-script.sh` を開き、冒頭の7つの変数を書き換える
-
-   | 変数名 | 何を入れるか |
-   |---|---|
-   | `NEW_HOSTNAME` | この顧客用のプロキシ名（自分で決める。例: `atlib-proxy-02`） |
-   | `NEW_PSK_ID` | この顧客用の識別子（自分で決める。例: `PSK-CUSTOMER-02`） |
-   | `CHISEL_PORT` | 手順2でメモした`port` |
-   | `CHISEL_USER` | 手順2でメモした`chisel username` |
-   | `CHISEL_PASS` | 手順2でメモした`chisel password` |
-   | `TINYPROXY_USER` | 手順2でメモした`tinyproxy username` |
-   | `TINYPROXY_PASS` | 手順2でメモした`tinyproxy password` |
+1. `Sensor Edge/kitting-script.sh` を開き、冒頭の7行を、ワークシートの**「【手順3】kitting-script.sh貼り付け用ブロック」列（N列）**の内容で丸ごと置き換える（7つの値がすべて正しい形式で入っているので、1行ずつ手打ちしなくてよい）
 
 2. 対象のラズパイに手順1と同じ方法でTeraTerm接続し、`kitting-script.sh`を送信する
    - メニューの**ファイル > SSH SCP...**をクリックする
@@ -570,7 +552,7 @@ gcloud iam service-accounts add-iam-policy-binding 135863453696-compute@develope
    ./kitting-script.sh
    ```
    （変数の書き換え忘れがあれば、`__REPLACE_ME__`が残っているとしてスクリプトが自動的に止まる。その場合は手順2に戻って値を確認する）
-4. `=== 【設定完了】===`に表示される **Hostname** ・ **PSK Identity** ・ **PSK Key** ・ **tinyproxy BasicAuth username** をメモ帳に控える（手順5・6で使う）
+4. `=== 【設定完了】===`に表示される **Hostname** ・ **PSK Identity** ・ **PSK Key** ・ **tinyproxy BasicAuth username** を、ワークシートの**Hostname(echo値)〜tinyproxy username(echo値)列（P・R・T・U列）**に貼り付ける（手順5で使う）。隣の「一致チェック」列（Q・S・V列）が自動で`OK`になることを確認する（`⚠ MISMATCH`と出た場合は、自分で決めたNEW_HOSTNAME/NEW_PSK_ID/tinyproxy_usernameと違う値が投入されてしまっている可能性があるので、先に進まず原因を確認する）
 5. `sudo rpi-eeprom-config --edit` で `BOOT_ORDER` を内蔵ストレージのみに変更して保存する（SDカードの複製には含まれないため、台ごとに毎回必要）
 6. `sudo reboot` する
 7. 再起動後、SSHで再接続する（ホスト鍵が変わったという警告が出るので、新しい鍵として承認する）。これでZabbix側の設定に進める
@@ -588,17 +570,18 @@ gcloud iam service-accounts add-iam-policy-binding 135863453696-compute@develope
 1. **画面**: `https://zabbix-admin.atlib.jp/` を開き、Googleアカウントでログインする
 2. **操作**: 左メニューの **Administration（管理） > Proxies（プロキシ）** を開き、右上の **Create proxy** をクリックする
 3. **操作**: 「Proxy」タブに以下を入力する
-   - **Proxy name**: 手順3でメモした `NEW_HOSTNAME` の値と**完全に同じ文字列**を入力する
+   - **Proxy name**: ワークシートの**NEW_HOSTNAME列（F列）**の値と**完全に同じ文字列**を入力する（手打ちせずコピー＆ペーストする）
    - **Proxy mode**: **Active** を選ぶ（Passiveは選ばない）
    - **Proxy group**: 何も選ばず空欄のままでよい
 4. **操作**: 「Encryption」タブ（暗号化）に切り替え、以下を入力する
    - 「Connections to proxy」の `PSK` にチェックを入れる（`No encryption`のチェックは外す）
    - 「PSK」欄の **PSK変更** ボタンをクリックする
-   - 表示された **PSK identity** 欄に、手順3でメモした `PSK Identity` の値を入力する
-   - **PSK value** 欄に、手順3でメモした `PSK Key` の値（64文字の英数字）を入力する
+   - 表示された **PSK identity** 欄に、ワークシートの**NEW_PSK_ID列（G列）**の値を入力する
+   - **PSK value** 欄に、ワークシートの**PSK Key列（T列）**の値（64文字の英数字）を入力する
 5. **操作**: 画面下の **Add**（新規作成時）または **更新**（既存プロキシのPSK再設定時）をクリックして保存する
 6. **確認**: 保存後、一覧画面で該当プロキシのステータスが数分以内に **「Available」**（緑色）に変わることを確認する
-7. **うまくいかない場合**: 「Unknown」のまま変わらない場合は、本ページの「うまくいかない場合」セクション、または詳細仕様書の手順9を参照する
+7. **操作**: 一覧画面で、今作成したプロキシの名前を**右クリック→「リンクのアドレスをコピー」**する。貼り付けたURLの中に`proxyid=123`のような形で数値が含まれているので、その数値をワークシートの**proxyid列（Y列）**に貼り付ける（`msp-customer-portal`のオンボーディング（`実施手順_顧客オンボーディング統合フロー.md`手順2）で使用する）
+8. **うまくいかない場合**: 「Unknown」のまま変わらない場合は、本ページの「うまくいかない場合」セクション、または詳細仕様書の手順9を参照する
 
 ---
 
@@ -607,12 +590,7 @@ gcloud iam service-accounts add-iam-policy-binding 135863453696-compute@develope
 2026-07-13より、顧客先に設置されたSensor Edgeへは直接アクセスできず、**IAPトンネルを張ってから**アクセスする方式になった（2026-07-21より、このIAPトンネルの起動はbatファイル自体が自動で行うようになったため、手動での事前準備は不要）。
 
 1. **操作**: `InfraVision_Launcher_Template.bat` をコピーして新しいファイルを作る
-2. **操作**: ファイル冒頭の変数を書き換える（tinyproxy認証情報はここには書き込まない）
-   ```bat
-   SET CUSTOMER_ID=<顧客ID>
-   SET CHISEL_PORT=<手順2でメモしたport>
-   SET TARGET_URL=<顧客サイトの管理対象機器のURL>
-   ```
+2. **操作**: ワークシートの**TARGET_URL列（AA列）**に顧客サイトの管理対象機器のURLを入力し、**「【手順6】InfraVision_Launcher_Template.bat貼り付け用ブロック」列（AB列）**の内容で、ファイル冒頭の変数（3行）を丸ごと置き換える
 3. **操作**: このbatファイルをダブルクリックする。IAPトンネルが別ウィンドウで自動的に起動し、数秒待ってからChromeが開く
 4. **操作**: Chromeがプロキシ認証を求めてきたら、1Passwordの「pj-infra vision」保管庫（顧客IDで検索）に保存済みのtinyproxy username/passwordを入力する
 5. **確認**: Chrome経由で顧客サイトの機器にリモートアクセスできることを確認する
@@ -621,7 +599,7 @@ gcloud iam service-accounts add-iam-policy-binding 135863453696-compute@develope
 
 ### PuTTYでSSH接続する場合
 
-Sensor Edge本体にブラウザではなくSSHで入りたい場合は、Chromeの代わりにPuTTYを使う。**先にIAPトンネルを起動しておくこと**（上記手順3のbatファイルを一度実行するか、`gcloud compute start-iap-tunnel zabbix-server <手順2でメモしたport> --local-host-port=localhost:<同じport> --zone=asia-northeast1-a --project=msp-zabbix`を別ウィンドウで実行しておく）。
+Sensor Edge本体にブラウザではなくSSHで入りたい場合は、Chromeの代わりにPuTTYを使う。**先にIAPトンネルを起動しておくこと**（上記手順3のbatファイルを一度実行するか、`gcloud compute start-iap-tunnel zabbix-server <ワークシートのport列(I列)の値> --local-host-port=localhost:<同じport> --zone=asia-northeast1-a --project=msp-zabbix`を別ウィンドウで実行しておく）。
 
 1. **画面**: PuTTYを起動する
 2. **操作**: 左側のカテゴリツリーで **Session** を開き、以下を入力する
@@ -631,7 +609,7 @@ Sensor Edge本体にブラウザではなくSSHで入りたい場合は、Chrome
 3. **操作**: 左側のツリーで **Connection > Proxy** を開き、以下を入力する
    - **Proxy type**: `HTTP CONNECT`（または`HTTP`）
    - **Proxy hostname**: `localhost`
-   - **Port**: 手順2でメモした`CHISEL_PORT`の値
+   - **Port**: ワークシートの**port列（I列）**の値
    - **Username** / **Password**: **1Passwordの「pj-infra vision」保管庫**（顧客IDで検索）に保存したtinyproxy username/password
    - 「Command to send to proxy」欄・「Print proxy diagnostics」欄は初期値のままでよい（変更不要）
 4. **操作**: 左側のツリーで **Connection > SSH > Auth > Credentials** を開き、「Private key file for authentication」欄に、手順0で変換した`.ppk`ファイル（atLIB共通鍵）を指定する
@@ -662,7 +640,7 @@ Sensor Edge本体にブラウザではなくSSHで入りたい場合は、Chrome
 
 1. **操作**: 本体のネジ・SDカードスロット周辺に、通し番号付きの改ざん検知シール（分解すると跡が残るタイプ）を貼る
 2. **画面**: 「Sensor Edge機器登録フォーム」を開く（リンクは`Sensor Edge/実施手順_機器管理システム.md`を参照）
-3. **操作**: デバイスのシリアル番号・製造番号（封印シールに記載した番号）・ホスト名（手順3でメモした`NEW_HOSTNAME`の値）・ユーザー名・SSH公開鍵識別子・発送日を入力し、顧客IDはプルダウンから選んで送信する（顧客名は自動的に記録される）
+3. **操作**: デバイスのシリアル番号・製造番号（封印シールに記載した番号）・ホスト名（ワークシートの**NEW_HOSTNAME列（F列）**の値）・ユーザー名・SSH公開鍵識別子・発送日を入力し、顧客IDはプルダウンから選んで送信する（顧客名は自動的に記録される）
 4. **確認**: 管理用スプレッドシートの「機器台帳」タブに、入力した内容の行が追加されていることを確認する
 5. **操作**: ラズパイ本体を顧客先へ発送する
 
@@ -676,15 +654,9 @@ Sensor Edge本体にブラウザではなくSSHで入りたい場合は、Chrome
    ```
    gcloud compute ssh zabbix-server --zone=asia-northeast1-a --tunnel-through-iap
    ```
-2. **（`zabbix-server`に接続した画面で）** 以下を実行する（`<CHISEL_PORT>`は手順2でメモした値に置き換える）。**これが最も確実な確認方法**
-   ```bash
-   sudo ss -tlnp | grep :<CHISEL_PORT>
-   ```
+2. **（`zabbix-server`に接続した画面で）** ワークシートの**「【手順9-2】ssコマンド」列（W列）**のコマンドを実行する。**これが最も確実な確認方法**
    **確認**: `LISTEN`と`chisel`のプロセスが表示されること（何も表示されない場合は接続できていない）
-3. **（同じく`zabbix-server`に接続した画面で・任意）** 直近に（再）接続したタイミングを確認したい場合は以下を実行する
-   ```bash
-   sudo journalctl -u chisel-server --since "10 min ago" | grep "R:<CHISEL_PORT>"
-   ```
+3. **（同じく`zabbix-server`に接続した画面で・任意）** 直近に（再）接続したタイミングを確認したい場合は、ワークシートの**「【手順9-3】journalctlコマンド」列（X列）**のコマンドを実行する
    **注意**: chiselは接続が確立した瞬間だけログを1行出力し、その後接続が安定して継続していても新しいログは出ない。**すでに接続済みの機器では、この10分以内のログチェックには何も表示されないのが正常**（異常ではない）。接続状況の確認は手順2（`ss`コマンド）を優先する。ヒットする場合の行の例:
    ```
    2026/07/20 23:18:03 server: session#19: tun: proxy#R:20002=>8888: Listening
@@ -712,17 +684,7 @@ Sensor Edge本体にブラウザではなくSSHで入りたい場合は、Chrome
    ```
    先頭が`<顧客ID>,`の行を探し、6列目の`active`を`revoked`に書き換えて保存する（`Ctrl+O` → Enter → `Ctrl+X`で保存して閉じる）
    - **注意**: この台帳は記録用の一覧であり、この書き換えだけでは実際のアクセスは止まらない。実際に接続を遮断するのは次のステップ
-3. **（同じ画面で）** `/etc/chisel/users.json`から該当エントリを削除し、反映する
-   ```bash
-   sudo python3 << 'PYEOF'
-   import json
-   p = "/etc/chisel/users.json"
-   d = json.load(open(p))
-   d = {k: v for k, v in d.items() if not k.startswith("<顧客ID>-user:")}
-   json.dump(d, open(p, "w"), indent=2)
-   PYEOF
-   sudo systemctl restart chisel-server
-   ```
+3. **（同じ画面で）** `/etc/chisel/users.json`から該当エントリを削除し、反映する。ワークシートの**「【手順10】users.json削除コマンド」列（AC列）**に、該当顧客ID用のコマンドが自動生成されているので、それをそのまま実行する（末尾に`sudo systemctl restart chisel-server`が続く）
    実行後、該当顧客のSensor Edgeはchisel-serverに再接続できなくなる（既存のトンネルも切れる）
 4. 機器がまだ手元にある、またはIAPトンネル経由でアクセスできる場合は、`/etc/tinyproxy/tinyproxy.conf`のBasicAuth行を削除・変更する
 5. Zabbix管理画面で該当プロキシを削除するか、PSKを再生成する（PSKローテーションの手順は`msp-frontend-server/実施手順_ZabbixProxy_PSKローテーション.md`を参照）
@@ -760,7 +722,7 @@ sudo systemctl restart tinyproxy
 - それでも分からない場合は担当エンジニアに連絡する
 </script>
 <script type="text/plain" id="src-guide-onboarding">
-最終更新: 2026-07-12
+最終更新: 2026-07-21
 対応する詳細仕様書: `msp-customer-portal/docs/運用手順書_顧客オンボーディング統合フロー.md`
 
 ## これは何の作業か
@@ -800,7 +762,7 @@ sudo systemctl restart tinyproxy
 
 **完了条件（次の手順に進む前に必ず確認する）**:
 - Zabbix管理画面で該当プロキシが「Available」表示になっている
-- 発行された **`proxyid`**（Zabbix Proxy ID）を控えている（手順2で使う）
+- 発行された **`proxyid`**（Zabbix Proxy ID）をワークシートの**proxyid列（Y列）**に貼り付けている（`Sensor Edge/実施手順_顧客追加フロー.md`手順5-7の「右クリック→リンクのアドレスをコピー」の方法で調べる。手順2で使う）
 
 > **重要な順序**: この手順1を完了させてから、次の手順2（オンボーディングスクリプト）を実行すること。**逆の順番で実行すると、後から直すのに手作業のデータベース修正が必要になる**ため、順番を守ること。
 
@@ -816,16 +778,7 @@ sudo systemctl restart tinyproxy
    ```bash
    cd /opt/atlib-msp-dev/msp-customer-portal
    ```
-3. **操作**: 以下をコピーし、`< >`で囲まれた部分をすべて実際の値に書き換えてから実行する
-   ```bash
-   npm run onboard -- \
-     --code <customer_code> \
-     --name "<company_name>" \
-     --email <連絡先メールアドレス> \
-     --plan "<プラン名>" \
-     --proxy-id <手順1で控えたproxyid> \
-     --ip-range <顧客のネットワークのIPレンジ、例: 192.168.1.1-254>
-   ```
+3. **操作**: [Sensor Edge 機器管理台帳](https://docs.google.com/spreadsheets/d/1x5dtPGwh-AqJamPmKA8TTj40D9noYWancf7WipK5I4E/edit)の「顧客追加ワークシート」タブを開き、該当行の**「【手順2(portal)】npm run onboardコマンド」列（Z列）**の内容をそのままコピーして実行する（顧客ID・会社名・メールアドレス・プラン名・proxyid・IPレンジがすべて自動で埋め込まれている。空欄がある場合は`⚠`と表示されるので、その場合は先に該当列を埋める）
 4. **確認**: エラーなく完了すること。`customer_code`が既に使われている場合はエラーで止まる（別のコードを使う）
 5. **確認**: 完了時にコンソールに次の手順3でそのまま使うコマンドが表示されるので、そのままコピーしておく
 6. **確認**: 手順0で顧客マスタへの割当を済ませているはずだが、まだの場合はここで必ず行う（忘れると、Sensor Edge機器登録フォームの顧客IDプルダウンにこの顧客が出てこない）
@@ -2757,7 +2710,7 @@ Cloud Consoleでの確認: [Monitoring > Uptime checks](https://console.cloud.go
 - 2026-07-12: 初版作成。既存のCloud SQL自動バックアップ・VMディスクスナップショット設定を`gcloud`で確認・記録。あわせてポータル・topologyページのUptime Check／アラートポリシーを新設。
 </script>
 <script type="text/plain" id="src-device-mgmt">
-最終更新: 2026-07-12
+最終更新: 2026-07-21
 関連ドキュメント: [Sensor Edge/実施手順_機器管理システム.md](実施手順_機器管理システム.md)（日常運用）、[Sensor Edge/運用手順書_顧客追加フロー.md](運用手順書_顧客追加フロー.md)（手順8で本システムのフォームを使用する）
 管理用スプレッドシート: [Sensor Edge 機器管理台帳](https://docs.google.com/spreadsheets/d/1x5dtPGwh-AqJamPmKA8TTj40D9noYWancf7WipK5I4E/edit)
 
@@ -2777,7 +2730,7 @@ Sensor Edge（顧客拠点設置のラズパイ）の資産情報（シリアル
 
 ## データ構造
 
-1つのスプレッドシート「Sensor Edge 機器管理台帳」に、4つの「マスタタブ」と、フォームごとに自動生成される「フォームの回答」タブを持たせる。
+1つのスプレッドシート「Sensor Edge 機器管理台帳」に、5つの「マスタタブ」と、フォームごとに自動生成される「フォームの回答」タブを持たせる。
 
 **設計方針（2026-07-12改訂）**: 各フォームで顧客情報を毎回手入力すると、表記ゆれ・入力ミスのリスクが高い。そのため「機器台帳」（シリアル番号キー）と「顧客マスタ」（顧客IDキー）の2つをマスタとし、フォームでは**キーを選ぶだけ**で他の項目（顧客名等）が自動補完される設計にしている。
 
@@ -2850,6 +2803,36 @@ Sensor Edge（顧客拠点設置のラズパイ）の資産情報（シリアル
 | 関連シリアル番号 | 分かれば手動で記入 |
 
 対応状況（ステータス・対応者・対応内容等）の更新は、マスタタブを直接手動編集する運用とする（更新用の別フォームは作らない）。
+
+### マスタタブ4: 顧客追加ワークシート（2026-07-21新設）
+
+`Sensor Edge/実施手順_顧客追加フロー.md`手順0〜10と`msp-customer-portal/docs/実施手順_顧客オンボーディング統合フロー.md`手順1〜2を通して発生する投入コマンド・値の受け渡しを、1顧客1行の形で自動生成するタブ。他のマスタタブと異なり「参照データ」ではなく「作業用データ＋数式による自動生成」が目的。
+
+**構築方法**: `Sensor Edge/tools/device-management/create-onboarding-worksheet.gs`をApps Scriptに貼り付けて`createOnboardingWorksheet`関数を実行する（1回だけ、既にタブがあれば何もしない）。手動でヘッダー・数式を入力する場合は`Sensor Edge/顧客追加ワークシート_テンプレート.csv`をタブに貼り付ける（1行目ヘッダー、2行目が数式テンプレート）。
+
+**列構成**（29列、A〜AC）:
+
+| 列 | 内容 | 種別 |
+|---|---|---|
+| A 顧客ID | 顧客マスタからのドロップダウン選択 | 手入力 |
+| B 会社名／C 連絡先メールアドレス | 顧客マスタから`VLOOKUP` | 自動 |
+| D プラン名／E IPレンジ／F NEW_HOSTNAME／G NEW_PSK_ID | ヒアリング内容・自分で決める値 | 手入力 |
+| H 【手順2-2】add_customer.sh実行コマンド | A・F・Gから自動生成 | 自動 |
+| I〜M port/chisel_username/chisel_password/tinyproxy_username/tinyproxy_password | `add_customer.sh`の出力を貼り付け | 手入力 |
+| N 【手順3】kitting-script.sh貼り付け用ブロック | F〜Mから自動生成（7行の複数行テキスト） | 自動 |
+| O 1Password登録タイトル | Aから自動生成 | 自動 |
+| P/R/T/U Hostname・PSK Identity・PSK Key・tinyproxy username（echo値） | `kitting-script.sh`の出力を貼り付け | 手入力 |
+| Q/S/V 一致チェック | P⇔F、R⇔G、U⇔Lの自動比較（`OK`／`⚠ MISMATCH`） | 自動 |
+| W/X 【手順9】ss・journalctlコマンド | Iから自動生成 | 自動 |
+| Y proxyid | Zabbix画面で確認して貼り付け（`Sensor Edge/実施手順_顧客追加フロー.md`手順5-7参照） | 手入力 |
+| Z 【手順2(portal)】npm run onboardコマンド | A〜E・Yから自動生成 | 自動 |
+| AA TARGET_URL | 手順6で判明次第入力 | 手入力 |
+| AB 【手順6】bat貼り付け用ブロック | A・I・AAから自動生成 | 自動 |
+| AC 【手順10】users.json削除コマンド | Aから自動生成（契約終了時に使用） | 自動 |
+
+未入力の項目があるセルは、数式が`⚠`付きの警告文を表示する（空欄のまま生成されたコマンドを誤って使う事故を防ぐ）。Q/S/V列で`⚠ MISMATCH`が出た場合は、`NEW_HOSTNAME`等が複数箇所で食い違って手打ちされているサインなので、先に進まず原因を確認する。
+
+**セキュリティ上の注意**: このタブは一時的にchisel/tinyproxy認証情報・PSK Keyを保持する。手順3・5の動作確認が済んだら、当該行の**J・K列（chisel認証情報）とT列（PSK Key）は消去する**。1Password登録確認後は**L・M列（tinyproxy認証情報）も消去してよい**（1Passwordが恒久的な保管場所であり、このシートは一時的な作業領域）。共有範囲は他のマスタタブと同じ`msp-staff@atlib.jp`のまま変更しない。
 
 ---
 
