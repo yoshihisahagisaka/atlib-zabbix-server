@@ -676,18 +676,22 @@ Sensor Edge本体にブラウザではなくSSHで入りたい場合は、Chrome
    ```
    gcloud compute ssh zabbix-server --zone=asia-northeast1-a --tunnel-through-iap
    ```
-2. **（`zabbix-server`に接続した画面で）** 以下を実行する（`<username>`は手順2でメモした値に置き換える）
+2. **（`zabbix-server`に接続した画面で）** 以下を実行する（`<CHISEL_PORT>`は手順2でメモした値に置き換える）
    ```bash
-   sudo journalctl -u chisel-server --since "10 min ago" | grep <username>
+   sudo journalctl -u chisel-server --since "10 min ago" | grep "R:<CHISEL_PORT>"
    ```
-   **確認**: それらしいログが出ていること
+   **確認**: 以下のような行が表示されること（`session#`の番号・時刻は毎回変わるが、`R:<CHISEL_PORT>=>8888: Listening`の部分が一致していればよい）
+   ```
+   2026/07/20 23:18:03 server: session#19: tun: proxy#R:20002=>8888: Listening
+   ```
+   何も表示されない場合は、顧客先のSensor Edgeがまだ接続できていない（Sensor Edge側の設置・起動、またはchisel-client側の認証情報を確認する）
 3. **（同じく`zabbix-server`に接続した画面で）** 以下を実行する（`<CHISEL_PORT>`は手順2でメモした値に置き換える）
    ```bash
    sudo ss -tlnp | grep :<CHISEL_PORT>
    ```
    **確認**: 何か表示されること（ポートが実際に使われている）
 4. **画面**: Zabbix管理画面の **Administration > Proxies** で、該当プロキシが **「Available」** になっていることを確認する
-5. **操作**: 手順6のIAPトンネルを起動した状態で、起動batファイルを実際にダブルクリックし、ブラウザで顧客先の機器の管理画面が表示されることを確認する
+5. **操作**: 起動batファイルを実際にダブルクリックし（IAPトンネルは自動で起動する）、ブラウザで顧客先の機器の管理画面が表示されることを確認する
 6. これが確認できたら作業完了
 
 ---
@@ -1752,8 +1756,10 @@ PuTTYの設定（**Connection > Proxyの認証情報と、SSHログイン認証�
 顧客がラズパイを設置・起動したら、**GCPリレーサーバー側から**以下で確認できる（顧客のSensor Edgeへ直接SSHできない前提）。
 
 ```bash
-# 1. Chiselサーバーがそのユーザーの接続を受けているか
-sudo journalctl -u chisel-server --since "10 min ago" | grep <username>
+# 1. Chiselサーバーが該当ポートのリバーストンネルを張れているか
+# （chiselのログにusernameは出力されないため、portでgrepする。
+#   ヒットする行の例: server: session#19: tun: proxy#R:20002=>8888: Listening）
+sudo journalctl -u chisel-server --since "10 min ago" | grep "R:<CHISEL_PORT>"
 
 # 2. 該当ポートで実際にリバース転送が張られているか
 sudo ss -tlnp | grep :<CHISEL_PORT>
@@ -1761,7 +1767,7 @@ sudo ss -tlnp | grep :<CHISEL_PORT>
 
 あわせて、Zabbix Server側で該当プロキシが「使用可能(Available)」表示になっているかを確認する（これはChiselトンネルとは独立した、Zabbix Proxy→Zabbix Serverの疎通確認になる）。
 
-Windows側でIAPトンネルを起動し、起動bat（手順6で作成したもの）を実際に実行して、ブラウザで対象機器の管理画面が表示されることを確認して完了とする。
+起動bat（手順6で作成したもの）を実際に実行し（IAPトンネルは自動起動する）、ブラウザで対象機器の管理画面が表示されることを確認して完了とする。
 
 ---
 
