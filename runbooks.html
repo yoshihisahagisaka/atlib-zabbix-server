@@ -808,8 +808,15 @@ sudo systemctl restart tinyproxy
 
 ## 手順2: ポータルへの顧客登録
 
-1. **画面/コマンド**: `msp-customer-portal`のプロジェクトがある端末で、ターミナルを開く
-2. **操作**: 以下をコピーし、`< >`で囲まれた部分をすべて実際の値に書き換えてから実行する
+1. **画面/コマンド**: 以下を実行し、`msp-frontend-server`にSSH接続する（`npm run onboard`は本番の認証情報・DB接続がセットアップ済みのこのサーバー上でのみ実行できる）
+   ```bash
+   gcloud compute ssh msp-frontend-server --zone=asia-northeast1-a --tunnel-through-iap
+   ```
+2. **操作**: 接続後、以下でプロジェクトのディレクトリへ移動する
+   ```bash
+   cd /opt/atlib-msp-dev/msp-customer-portal
+   ```
+3. **操作**: 以下をコピーし、`< >`で囲まれた部分をすべて実際の値に書き換えてから実行する
    ```bash
    npm run onboard -- \
      --code <customer_code> \
@@ -819,9 +826,9 @@ sudo systemctl restart tinyproxy
      --proxy-id <手順1で控えたproxyid> \
      --ip-range <顧客のネットワークのIPレンジ、例: 192.168.1.1-254>
    ```
-3. **確認**: エラーなく完了すること。`customer_code`が既に使われている場合はエラーで止まる（別のコードを使う）
-4. **確認**: 完了時にコンソールに次の手順3でそのまま使うコマンドが表示されるので、そのままコピーしておく
-5. **確認**: 手順0で顧客マスタへの割当を済ませているはずだが、まだの場合はここで必ず行う（忘れると、Sensor Edge機器登録フォームの顧客IDプルダウンにこの顧客が出てこない）
+4. **確認**: エラーなく完了すること。`customer_code`が既に使われている場合はエラーで止まる（別のコードを使う）
+5. **確認**: 完了時にコンソールに次の手順3でそのまま使うコマンドが表示されるので、そのままコピーしておく
+6. **確認**: 手順0で顧客マスタへの割当を済ませているはずだが、まだの場合はここで必ず行う（忘れると、Sensor Edge機器登録フォームの顧客IDプルダウンにこの顧客が出てこない）
 
 ---
 
@@ -1876,6 +1883,20 @@ Sensor Edge側のtinyproxyが詰まっている可能性がある（2026-07-01�
 ---
 
 ## 手順2: ポータルオンボーディングスクリプト実行
+
+**実行環境（2026-07-21セットアップ済み）**: `msp-frontend-server`にSSHして実行する。
+
+```bash
+gcloud compute ssh msp-frontend-server --zone=asia-northeast1-a --tunnel-through-iap
+cd /opt/atlib-msp-dev/msp-customer-portal
+```
+
+このサーバーには以下がセットアップ済み：
+- `git sparse-checkout`に`msp-customer-portal`を追加済み、`npm install`済み
+- 本番のSecret Managerから取得した認証情報一式（DB・Zabbix API・SMTP・JWT・管理画面Basic認証）を`.env`に生成済み（`.env`自体はgit管理外、`chmod 600`でこのサーバー上にのみ存在）
+- Cloud SQL Auth Proxy（`cloud-sql-proxy.service`、systemd常駐）が`127.0.0.1:5432`で待受し、本番ポータルDBへ接続
+
+**注意**: このリポジトリは`dotenv`等の`.env`自動読込みの仕組みを持たないため、`npm run onboard`は内部で`node --env-file=.env`を使うよう修正済み（`package.json`参照）。`.env`が存在しない・読み込めない場合は`PASSWORD_RESET_URL_BASE`等の必須値エラーで即座に失敗する。
 
 ```bash
 npm run onboard -- \
