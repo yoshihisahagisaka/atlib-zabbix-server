@@ -407,12 +407,14 @@ a.xref-missing::after { content: ""; }
 
 ### 使用ツールのインストール
 
-以下3つを作業端末（Windows機）にインストールする。いずれも既定のオプションのまま「次へ」を進めればよい。
+以下4つを作業端末（Windows機）にインストールする。いずれも既定のオプションのまま「次へ」を進めればよい。
 
 1. **Raspberry Pi Imager**: https://www.raspberrypi.com/software/ を開き、「Download for Windows」からインストーラーをダウンロードして実行する
 2. **Win32DiskImager**: https://sourceforge.net/projects/win32diskimager/ を開き、「Download」からインストーラーをダウンロードして実行する
 3. **TeraTerm**: https://github.com/TeraTermProject/teraterm/releases を開き、最新版の`teraterm-x.xx.exe`（インストーラー版）をダウンロードして実行する
-4. **Google Cloud SDK**（手順2・9・10で`zabbix-server`にSSH接続するために必要）
+4. **PuTTY**（手順6・9で、発送後のSensor EdgeへSSH接続する際に使う。`PuTTYgen`という鍵変換ツールも同時にインストールされる）
+   - https://www.chiark.greenend.org.uk/~sgtatham/putty/latest.html を開き、Windows用インストーラー（`putty-64bit-x.xx-installer.msi`等）をダウンロードして実行する
+5. **Google Cloud SDK**（手順2・9・10で`zabbix-server`にSSH接続するために必要）
    - https://cloud.google.com/sdk/docs/install を開き、Windows用インストーラー（`GoogleCloudSDKInstaller.exe`）をダウンロードして実行する
    - インストールは既定のオプションのまま進める（最後の画面で「Start Google Cloud SDK Shell」「gcloud initを起動する」等のチェックが入っていればそのままでよい）
 
@@ -470,9 +472,14 @@ gcloud iam service-accounts add-iam-policy-binding 135863453696-compute@develope
 
 ### atLIB共通のSSH秘密鍵の準備
 
-1. 担当エンジニアに、atLIB共通のSSH秘密鍵ファイル（Sensor Edge本体へのログイン専用）の入手方法を確認し、ファイルを受け取る
+1. 担当エンジニアに、atLIB共通のSSH秘密鍵ファイル（Sensor Edge本体へのログイン専用、OpenSSH形式の`id_rsa`）の入手方法を確認し、ファイルを受け取る
 2. 受け取った鍵ファイルを、作業端末の分かりやすい場所（例: `C:\Users\<自分のユーザー名>\keys\`フォルダを作って保存）に置く
 3. このファイルは手順1・手順3でTeraTermの「SSH認証」画面から毎回参照するので、パスを忘れないようにしておく（フォルダごと削除・移動しないこと）
+4. **PuTTY用に変換する**（手順6・9でPuTTYを使う場合に必要。TeraTermはOpenSSH形式をそのまま使えるが、**PuTTYは独自の`.ppk`形式しか読み込めない**ため、事前に一度だけ変換しておく）
+   - 「PuTTYgen」を起動する（PuTTYインストール時に同時に入っている）
+   - メニューの **Conversions > Import key** をクリックし、手順1で保存した`id_rsa`を選択する（パスフレーズがあれば入力する）
+   - **「Save private key」**ボタンをクリックし、同じフォルダに`id_rsa.ppk`として保存する
+   - 以降、PuTTYではこの`.ppk`ファイルの方を指定する
 
 ### Zabbix管理画面へのアクセス確認
 
@@ -611,6 +618,32 @@ gcloud iam service-accounts add-iam-policy-binding 135863453696-compute@develope
 5. **確認**: Chrome経由で顧客サイトの機器にリモートアクセスできることを確認する
    - つながらない場合は、数秒待ってからブラウザを再読み込みする（IAPトンネルの確立に時間がかかっていることがある）
    - 作業が終わったら、自動で開いた「InfraVision IAP Tunnel」という別ウィンドウを閉じる
+
+### PuTTYでSSH接続する場合
+
+Sensor Edge本体にブラウザではなくSSHで入りたい場合は、Chromeの代わりにPuTTYを使う。**先にIAPトンネルを起動しておくこと**（上記手順3のbatファイルを一度実行するか、`gcloud compute start-iap-tunnel zabbix-server <手順2でメモしたport> --local-host-port=localhost:<同じport> --zone=asia-northeast1-a --project=msp-zabbix`を別ウィンドウで実行しておく）。
+
+1. **画面**: PuTTYを起動する
+2. **操作**: 左側のカテゴリツリーで **Session** を開き、以下を入力する
+   - **Host Name**: 接続したいSensor Edge本体のIP
+   - **Port**: `22`
+   - **Connection type**: `SSH`
+3. **操作**: 左側のツリーで **Connection > Proxy** を開き、以下を入力する
+   - **Proxy type**: `HTTP CONNECT`（または`HTTP`）
+   - **Proxy hostname**: `localhost`
+   - **Port**: 手順2でメモした`CHISEL_PORT`の値
+   - **Username** / **Password**: **1Passwordの「pj-infra vision」保管庫**（顧客IDで検索）に保存したtinyproxy username/password
+   - 「Command to send to proxy」欄・「Print proxy diagnostics」欄は初期値のままでよい（変更不要）
+4. **操作**: 左側のツリーで **Connection > SSH > Auth > Credentials** を開き、「Private key file for authentication」欄に、手順0で変換した`.ppk`ファイル（atLIB共通鍵）を指定する
+5. **操作**: 左側のツリーで **Session** に戻り、「Open」をクリックして接続する
+6. **操作**: `login as:` に対して **`atladmin`** と入力する
+
+**注意**: Connection > Proxyの認証情報（tinyproxy）と、`login as:`後のSSH認証情報（atladmin＋秘密鍵）は**別物**。混同しないこと（Proxy欄に`atladmin`を入れると401エラーになる）。
+
+**うまくいかない場合**:
+- `Unable to use key file "..." (OpenSSH SSH-2 private key (new format))` → 鍵が未変換。手順0の「PuTTY用に変換する」を実施してから`.ppk`ファイルを指定し直す
+- `Proxy error: HTTP response 401 Unauthorized` → Connection > Proxyの認証情報が間違っている。1Password「pj-infra vision」保管庫のtinyproxy username/passwordを入れ直す（`atladmin`ではない）
+- `Server refused our key` → 鍵は正しく読み込めているが、指定した鍵がこのSensor Edgeの`authorized_keys`に登録されていない。atLIB共通鍵の正しいファイルを使っているか、担当エンジニアに確認する
 
 ---
 
@@ -1653,21 +1686,46 @@ sudo systemctl restart chisel-server
 
 ## 手順6: Windows操作端末用の起動batファイル作成
 
-2026-07-13より、20001-30000番ポートはCloud IAP経由でのみアクセス可能（直接`zabbix.atlib.jp:<port>`には接続できない）。また、tinyproxy側にもBasicAuth認証が必要になった。
+2026-07-13より、20001-30000番ポートはCloud IAP経由でのみアクセス可能（直接`zabbix.atlib.jp:<port>`には接続できない）。また、tinyproxy側にもBasicAuth認証が必要になった。2026-07-21より、`InfraVision_Launcher_Template.bat`自体がIAPトンネルの起動を自動で行うようになったため、手動での事前起動は不要。
 
-1. まずIAPトンネルを起動する（別ウィンドウ、接続中は開いたままにする）
-   ```powershell
-   gcloud compute start-iap-tunnel zabbix-server <手順2で払い出されたport> --local-host-port=localhost:<同port> --zone=asia-northeast1-a --project=msp-zabbix
-   ```
-2. `InfraVision_Launcher_Template.bat` をコピーし、冒頭の変数を書き換える（接続先を`zabbix.atlib.jp`ではなく`localhost`にする点に注意）
+1. `InfraVision_Launcher_Template.bat` をコピーし、冒頭の変数を書き換える（接続先を`zabbix.atlib.jp`ではなく`localhost`にする点に注意）
    ```bat
    SET CUSTOMER_ID=<顧客ID>
    SET CHISEL_PORT=<手順2で払い出されたport>
    SET TARGET_URL=<顧客サイトの管理対象機器URL>
    ```
    **tinyproxy username/passwordはbatファイルに書き込まない。** Chromeの起動時にプロキシ認証ダイアログが出るので、1Passwordの「pj-infra vision」保管庫（顧客IDで検索）から都度参照して入力する。batファイルは共有・コピーされる前提のファイルであり、認証情報の平文保存を避けるため。
+2. batファイルを実行する。IAPトンネルが「InfraVision IAP Tunnel」という別ウィンドウで自動的に起動し、数秒待ってからChromeが開く。Chromeのプロキシ認証ダイアログには1Passwordの値を入力する
 
-技術者はこのbatを実行するだけでIAPトンネルが別ウィンドウで自動的に起動し、少し待ってからChrome経由のリモートアクセスができる（tinyproxyの認証ダイアログは1Passwordの値を入力する）。Chromeの`--load-extension`によるプロキシ認証の自動応答は、Chrome Stableチャンネルでは無効化されており実現できない（2026-07-21確認済み）。SSHで対象機器に入りたい場合は、bat末尾のコメントを参照しPuTTYのProxy設定（HTTP, hostname=`localhost`, Port=当該CHISEL_PORT, Username/Password=1Passwordの認証情報）を行う。
+Chromeの`--load-extension`によるプロキシ認証の自動応答は、Chrome Stableチャンネルではセキュリティ上の理由で無効化されており実現できない（2026-07-21実機確認済み。`chrome://extensions`に一切登録されない）。
+
+### SSHで対象機器に入る場合（PuTTY）
+
+Chromeではなく直接SSHで入りたい場合はPuTTYを使う。事前準備として、atLIB共通鍵（OpenSSH形式`id_rsa`）をPuTTYgenで`.ppk`形式に変換しておく（`Conversions > Import key` → `Save private key`。TeraTermはOpenSSH形式をそのまま使えるがPuTTYは`.ppk`しか読めないため必須）。
+
+IAPトンネルは上記batファイルの実行で自動起動するので、それを流用するか、手動で以下を実行してもよい。
+
+```powershell
+gcloud compute start-iap-tunnel zabbix-server <手順2で払い出されたport> --local-host-port=localhost:<同port> --zone=asia-northeast1-a --project=msp-zabbix
+```
+
+PuTTYの設定（**Connection > Proxyの認証情報と、SSHログイン認証情報は別物**。混同すると401 Unauthorizedになる）:
+
+| 画面 | 項目 | 値 |
+|---|---|---|
+| Session | Host Name | 対象機器IP |
+| Session | Port | 22 |
+| Connection > Proxy | Proxy type | HTTP CONNECT |
+| Connection > Proxy | Proxy hostname | localhost |
+| Connection > Proxy | Port | 当該CHISEL_PORT |
+| Connection > Proxy | Username / Password | 1Password「pj-infra vision」保管庫のtinyproxy認証情報 |
+| Connection > SSH > Auth > Credentials | Private key file | atLIB共通鍵の`.ppk`ファイル |
+| `login as:`（接続後） | ユーザー名 | `atladmin` |
+
+**既知のエラーと対処**（2026-07-21実機で発生・解消済み）:
+- `Unable to use key file "..." (OpenSSH SSH-2 private key (new format))` → 鍵が未変換。PuTTYgenで`.ppk`に変換する
+- `Proxy error: HTTP response 401 Unauthorized` → Connection > Proxyの認証情報に`atladmin`を入れてしまっている等、tinyproxy認証情報の誤り。1Password「pj-infra vision」保管庫の値に修正する
+- `Server refused our key` → 鍵は読み込めているが、このSensor Edgeに登録された鍵と一致しない。正しいatLIB共通鍵ファイルを使っているか確認する
 
 ---
 
@@ -1739,7 +1797,7 @@ Sensor Edge側のtinyproxyが詰まっている可能性がある（2026-07-01�
 2026-07-13以降、IAPトンネル（Googleアカウント権限）とtinyproxy BasicAuthの2段階認証が必要。以下を確認する。
 
 - IAPトンネルが起動しているか（`gcloud compute start-iap-tunnel`のウィンドウが生きているか）、実行者に対象インスタンスへの`roles/iap.tunnelResourceAccessor`権限があるか
-- PuTTY/ChromeのProxy設定のUsername/Passwordが、1Password「pj-infra vision」保管庫に登録したtinyproxy認証情報と一致しているか（手打ちミスに注意）
+- PuTTY/ChromeのProxy設定のUsername/Passwordが、手順2で払い出されたtinyproxy認証情報と一致しているか（手打ちミスに注意）
 
 ### 新規顧客が繋がらない
 
