@@ -364,7 +364,7 @@ a.xref-missing::after { content: ""; }
       <button class="theme-btn" id="themeToggle" type="button" aria-label="配色を切り替え">
         <span id="themeIcon">◐</span><span id="themeLabel">配色を切替</span>
       </button>
-      <p class="gen-note">上段「操作ガイド」は非技術者向けの実施手順、下段「運用仕様書」は詳細な技術背景です。文中の水色リンクをクリックすると該当箇所へ移動します。生成日: 2026-07-16</p>
+      <p class="gen-note">上段「操作ガイド」は非技術者向けの実施手順、下段「運用仕様書」は詳細な技術背景です。文中の水色リンクをクリックすると該当箇所へ移動します。生成日: 2026-07-21</p>
     </div>
   </nav>
   <main class="main" id="main"></main>
@@ -526,6 +526,8 @@ gcloud iam service-accounts add-iam-policy-binding 135863453696-compute@develope
 | tinyproxy username | |
 | tinyproxy password | |
 
+**tinyproxy username / tinyproxy passwordは、この後1Passwordの「pj-infra vision」保管庫に保存する**（顧客IDが分かる名前で登録、例: `InfraVision - atlse000001`）。手順6でリモートアクセスするたびに毎回参照するための恒久保存で、batファイルには書き込まない。`chisel username` / `chisel password`は手順3でのみ使うため、1Passwordへの保存は不要（メモ帳の控えは作業完了後に破棄してよい）。
+
 **エラーが出た場合**:
 - `このシステムではスクリプトの実行が無効になっているため...` → 通常のPowerShellで実行してしまっている。「Google Cloud SDK Shell」に切り替えて実行し直す
 - `The required property [project] is not currently set` → `gcloud config set project msp-zabbix` を実行してから、もう一度上記のコマンドを実行する
@@ -595,23 +597,20 @@ gcloud iam service-accounts add-iam-policy-binding 135863453696-compute@develope
 
 ## 手順6: 技術者用の遠隔操作ファイルを作る
 
-2026-07-13より、顧客先に設置されたSensor Edgeへは直接アクセスできず、**IAPトンネルを張ってから**アクセスする方式になった。
+2026-07-13より、顧客先に設置されたSensor Edgeへは直接アクセスできず、**IAPトンネルを張ってから**アクセスする方式になった（2026-07-21より、このIAPトンネルの起動はbatファイル自体が自動で行うようになったため、手動での事前準備は不要）。
 
-1. **画面/コマンド**: 以下を実行し、IAPトンネルを起動する（`<手順2でメモしたport>`を実際の値に置き換える。このウィンドウは作業中ずっと開いたままにしておく）
-   ```powershell
-   gcloud compute start-iap-tunnel zabbix-server <手順2でメモしたport> --local-host-port=localhost:<同じport> --zone=asia-northeast1-a --project=msp-zabbix
-   ```
-   **確認**: `Listening on port [...]` と表示されること
-2. **操作**: `InfraVision_Launcher_Template.bat` をコピーして新しいファイルを作る
-3. **操作**: ファイル冒頭の変数を書き換える
+1. **操作**: `InfraVision_Launcher_Template.bat` をコピーして新しいファイルを作る
+2. **操作**: ファイル冒頭の変数を書き換える（tinyproxy認証情報はここには書き込まない）
    ```bat
    SET CUSTOMER_ID=<顧客ID>
    SET CHISEL_PORT=<手順2でメモしたport>
-   SET TINYPROXY_USER=<手順2でメモしたtinyproxy username>
-   SET TINYPROXY_PASS=<手順2でメモしたtinyproxy password>
    SET TARGET_URL=<顧客サイトの管理対象機器のURL>
    ```
-4. **確認**: IAPトンネルを起動した状態でこのbatファイルをダブルクリックすると、Chrome経由で顧客サイトの機器にリモートアクセスできることを確認する
+3. **操作**: このbatファイルをダブルクリックする。IAPトンネルが別ウィンドウで自動的に起動し、数秒待ってからChromeが開く
+4. **操作**: Chromeがプロキシ認証を求めてきたら、1Passwordの「pj-infra vision」保管庫（顧客IDで検索）に保存済みのtinyproxy username/passwordを入力する
+5. **確認**: Chrome経由で顧客サイトの機器にリモートアクセスできることを確認する
+   - つながらない場合は、数秒待ってからブラウザを再読み込みする（IAPトンネルの確立に時間がかかっていることがある）
+   - 作業が終わったら、自動で開いた「InfraVision IAP Tunnel」という別ウィンドウを閉じる
 
 ---
 
@@ -700,7 +699,7 @@ gcloud iam service-accounts add-iam-policy-binding 135863453696-compute@develope
 
 ### 顧客先のブラウザ・SSHアクセスがタイムアウトする
 
-顧客先に発送済みの機器は、手順1・3で使った「同じLAN内から直接SSH」はできない（顧客のネットワーク内にあるため）。手順6と同じ方法でIAPトンネルを起動し、PuTTYのProxy設定（HTTP, hostname=`localhost`, Port=当該CHISEL_PORT, Username/Password=手順2でメモしたtinyproxy認証情報）で接続し、以下を実行して復旧を試みる。
+顧客先に発送済みの機器は、手順1・3で使った「同じLAN内から直接SSH」はできない（顧客のネットワーク内にあるため）。手順6と同じ方法でIAPトンネルを起動し、PuTTYのProxy設定（HTTP, hostname=`localhost`, Port=当該CHISEL_PORT, Username/Password=1Password「pj-infra vision」保管庫のtinyproxy認証情報）で接続し、以下を実行して復旧を試みる。
 ```bash
 sudo systemctl restart tinyproxy
 ```
@@ -710,7 +709,7 @@ sudo systemctl restart tinyproxy
 
 - `gcloud compute start-iap-tunnel`のウィンドウがまだ開いているか確認する（閉じるとトンネルも切れる）
 - 自分のGoogleアカウントに、対象インスタンスへのIAPアクセス権限があるか担当エンジニアに確認する
-- PuTTY/ChromeのProxy設定のUsername/Passwordが、手順2でメモしたtinyproxy認証情報と一致しているか確認する（手打ちミスが多い）
+- PuTTY/ChromeのProxy設定のUsername/Passwordが、1Password「pj-infra vision」保管庫のtinyproxy認証情報と一致しているか確認する（手打ちミスが多い）
 
 ### 新規顧客が繋がらない
 
@@ -1582,6 +1581,8 @@ sudo /etc/chisel/add_customer.sh <顧客ID>
 - `tinyproxy username`（例: customerB-tp）
 - `tinyproxy password`（自動生成された24文字。2026-07-13より、tinyproxy側のリモートアクセス認証も顧客ごとに個別発行するようになった）
 
+`tinyproxy username`/`tinyproxy password`は、**1Passwordの「pj-infra vision」保管庫に顧客IDが分かる名前で登録する**（例: `InfraVision - customerB`）。技術者が手順6・9で毎回手入力する認証情報のため、恒久的な保管場所が必要（batファイルには書き込まない。理由は手順6を参照）。`chisel username`/`chisel password`は手順3でのみ使用し、以降は参照しないため1Passwordへの保存は不要。
+
 払い出し後、変更を反映させる。
 
 ```bash
@@ -1658,16 +1659,15 @@ sudo systemctl restart chisel-server
    ```powershell
    gcloud compute start-iap-tunnel zabbix-server <手順2で払い出されたport> --local-host-port=localhost:<同port> --zone=asia-northeast1-a --project=msp-zabbix
    ```
-2. `InfraVision_Launcher_Template.bat` をコピーし、冒頭の変数を書き換える（接続先を`zabbix.atlib.jp`ではなく`localhost`にする点、tinyproxy認証情報を追加する点に注意）
+2. `InfraVision_Launcher_Template.bat` をコピーし、冒頭の変数を書き換える（接続先を`zabbix.atlib.jp`ではなく`localhost`にする点に注意）
    ```bat
    SET CUSTOMER_ID=<顧客ID>
    SET CHISEL_PORT=<手順2で払い出されたport>
-   SET TINYPROXY_USER=<手順2で払い出されたtinyproxy username>
-   SET TINYPROXY_PASS=<手順2で払い出されたtinyproxy password>
    SET TARGET_URL=<顧客サイトの管理対象機器URL>
    ```
+   **tinyproxy username/passwordはbatファイルに書き込まない。** Chromeの起動時にプロキシ認証ダイアログが出るので、1Passwordの「pj-infra vision」保管庫（顧客IDで検索）から都度参照して入力する。batファイルは共有・コピーされる前提のファイルであり、認証情報の平文保存を避けるため。
 
-技術者はIAPトンネルを起動した状態でこのbatを実行するだけでChrome経由のリモートアクセスができる。SSHで対象機器に入りたい場合は、bat末尾のコメントを参照しPuTTYのProxy設定（HTTP, hostname=`localhost`, Port=当該CHISEL_PORT, Username/Password=tinyproxy認証情報）を行う。
+技術者はこのbatを実行するだけでIAPトンネルが別ウィンドウで自動的に起動し、少し待ってからChrome経由のリモートアクセスができる（tinyproxyの認証ダイアログは1Passwordの値を入力する）。Chromeの`--load-extension`によるプロキシ認証の自動応答は、Chrome Stableチャンネルでは無効化されており実現できない（2026-07-21確認済み）。SSHで対象機器に入りたい場合は、bat末尾のコメントを参照しPuTTYのProxy設定（HTTP, hostname=`localhost`, Port=当該CHISEL_PORT, Username/Password=1Passwordの認証情報）を行う。
 
 ---
 
@@ -1739,7 +1739,7 @@ Sensor Edge側のtinyproxyが詰まっている可能性がある（2026-07-01�
 2026-07-13以降、IAPトンネル（Googleアカウント権限）とtinyproxy BasicAuthの2段階認証が必要。以下を確認する。
 
 - IAPトンネルが起動しているか（`gcloud compute start-iap-tunnel`のウィンドウが生きているか）、実行者に対象インスタンスへの`roles/iap.tunnelResourceAccessor`権限があるか
-- PuTTY/ChromeのProxy設定のUsername/Passwordが、手順2で払い出されたtinyproxy認証情報と一致しているか（手打ちミスに注意）
+- PuTTY/ChromeのProxy設定のUsername/Passwordが、1Password「pj-infra vision」保管庫に登録したtinyproxy認証情報と一致しているか（手打ちミスに注意）
 
 ### 新規顧客が繋がらない
 
