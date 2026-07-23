@@ -49,6 +49,10 @@ TEMPLATE_ID_ICMP = "10564"   # ICMP Ping
 SOURCE_RULE_NAME = "テストルール"  # snmp_communityとdcheck構造の複製元（動作実績あり）。
 # 新規ルール作成時のみ参照する。既存ルールの再利用時は参照しないため、このルール
 # 自体が削除済みでも既存顧客に対する再実行（--applyの冪等性チェック等）は影響を受けない。
+MIN_SOURCE_SNMP_DCHECKS = 2  # atLIB実運用ルールの実績値（sysName + sysObjectID）。
+# 2026-07-22判明: 「テストルール」がSNMPチェック1件（sysDescrのみ）の状態で複製元に
+# 使われ、新規顧客のディスカバリが一部機器（ルーター等）を検出できない不具合が発生した。
+# 件数不足を機械的に検知して停止させることで、同種の不具合を未然に防ぐ。
 
 # 標準チェックリスト（type, ports, 用途）。SNMPチェックのkey_・snmp_communityは
 # SOURCE_RULE_NAMEから複製するため、ここではTCP/ICMPチェックのみ定義する。
@@ -97,6 +101,14 @@ def main():
             sys.exit(1)
         snmp_dchecks = [dc for dc in source_rule["dchecks"] if dc["type"] == "11"]
         print(f"複製元ルール「{SOURCE_RULE_NAME}」: druleid={source_rule['druleid']}  SNMPチェック{len(snmp_dchecks)}件を複製")
+        if len(snmp_dchecks) < MIN_SOURCE_SNMP_DCHECKS:
+            print(f"[エラー] 複製元ルール「{SOURCE_RULE_NAME}」のSNMPチェックが{len(snmp_dchecks)}件しかありません"
+                  f"（{MIN_SOURCE_SNMP_DCHECKS}件以上が必要）。")
+            print("この状態で複製すると、一部の機器がディスカバリで検出されなくなります"
+                  "（2026-07-22に実際に発生した不具合）。")
+            print(f"Zabbix管理画面で「{SOURCE_RULE_NAME}」のSNMPチェックを、実運用で動作実績のある"
+                  "atLIBのルール（MSP_インフラ自動検知_atlib）と同じ内容に揃えてから再実行してください。")
+            sys.exit(1)
     existing_snmp_action = _find_action_by_name(zabbix, snmp_action_name)
     print(f"アクション「{snmp_action_name}」: {'既に存在します' if existing_snmp_action else '未作成'}")
     existing_icmp_action = _find_action_by_name(zabbix, icmp_action_name)
@@ -129,6 +141,17 @@ def main():
     if not args.customer_code or not args.ip_range:
         print("\n[エラー] --apply には --customer-code と --ip-range が必須です。")
         sys.exit(1)
+
+    if args.proxy_id and not existing_rule:
+        conflicting = _find_rules_using_proxy(zabbix, args.proxy_id, exclude_name=rule_name)
+        if conflicting:
+            names = "、".join(r["name"] for r in conflicting)
+            print(f"\n[エラー] 指定された --proxy-id {args.proxy_id} は、既に他の顧客のルールで使用されています: {names}")
+            print("同じProxyを複数顧客で共有すると、ZabbixがIP+インターフェース+Proxyの一致を")
+            print("基準に既存ホストへ相乗りさせてしまい、片方の顧客の実機がもう片方の顧客の")
+            print("ホストグループにも登録される事故につながります（2026-07-23実機で確認済み）。")
+            print("proxy-idが正しくこの顧客専用のものか確認してから再実行してください。")
+            sys.exit(1)
 
     print("\n=== 構成投入を開始します ===")
 
@@ -219,6 +242,11 @@ def _find_source_rule(zabbix: ZabbixClient) -> dict | None:
 def _find_rule_by_name(zabbix: ZabbixClient, name: str) -> dict | None:
     rules = zabbix.call("drule.get", {"output": ["druleid"], "filter": {"name": name}})
     return rules[0] if rules else None
+
+
+def _find_rules_using_proxy(zabbix: ZabbixClient, proxy_id: str, exclude_name: str) -> list[dict]:
+    rules = zabbix.call("drule.get", {"output": ["druleid", "name", "proxyid", "status"]})
+    return [r for r in rules if r.get("proxyid") == proxy_id and r["name"] != exclude_name and r["status"] == "0"]
 
 
 def _find_action_by_name(zabbix: ZabbixClient, name: str) -> dict | None:
