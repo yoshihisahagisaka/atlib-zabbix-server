@@ -277,6 +277,7 @@ body {
   word-break: break-word;
 }
 .doc pre {
+  position: relative;
   margin: 0 0 16px;
   background: var(--code-bg);
   border: 1px solid var(--code-border);
@@ -284,6 +285,23 @@ body {
   overflow-x: auto;
   box-shadow: var(--shadow);
 }
+.doc pre .copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-family: 'JBMono', ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: .03em;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--code-border);
+  background: var(--bg);
+  color: var(--muted);
+  cursor: pointer;
+  opacity: .75;
+}
+.doc pre .copy-btn:hover { opacity: 1; }
+.doc pre .copy-btn.copied { color: var(--accent, #2a9d5c); border-color: currentColor; opacity: 1; }
 .doc pre code {
   display: block;
   background: none;
@@ -371,7 +389,7 @@ a.xref-missing::after { content: ""; }
 </div>
 
 <script type="text/plain" id="src-guide-sensor-edge">
-最終更新: 2026-07-21
+最終更新: 2026-07-24
 対応する詳細仕様書: `Sensor Edge/運用手順書_顧客追加フロー.md`（用語の意味や「なぜこうなっているか」はそちらを参照。本ページは「何をどう操作するか」だけに絞っている）
 ベースイメージの作り方: `Sensor Edge/運用手順書_ベースイメージ作成.md`
 機器登録フォームの使い方: `Sensor Edge/実施手順_機器管理システム.md`
@@ -399,7 +417,7 @@ a.xref-missing::after { content: ""; }
   - `Sensor Edge/運用手順書_ベースイメージ作成.md`で作成済みの最新のベースイメージ`.img`ファイル
 - **[Sensor Edge 機器管理台帳](https://docs.google.com/spreadsheets/d/1x5dtPGwh-AqJamPmKA8TTj40D9noYWancf7WipK5I4E/edit)の「顧客追加ワークシート」タブを開いておく**（2026-07-21〜。作業中に出てくる値はメモ帳ではなくこのタブの該当行に貼り付ける。投入コマンドの多くが自動生成され、`NEW_HOSTNAME`等の手打ちミスも自動チェックされる）
 
-初めてこの作業を担当する場合は、先に**手順0（初回準備）**を済ませておくこと。2回目以降は手順0は不要。
+初めてこの作業を担当する場合は、先に**手順0（初回準備）**を済ませておくこと。2回目以降は手順0は不要。手順1〜10を上から順に実施すればよい。エラーが出た場合のみ[うまくいかない場合](xref:guide-sensor-edge#うまくいかない場合)を参照する。
 
 ---
 
@@ -527,12 +545,7 @@ gcloud iam service-accounts add-iam-policy-binding 135863453696-compute@develope
 
 **tinyproxy username / tinyproxy passwordは、この後1Passwordの「pj-infra vision」保管庫に保存する**（ワークシートの**「1Password登録タイトル」列（O列）**にタイトルが自動生成されている）。手順6でリモートアクセスするたびに毎回参照するための恒久保存で、batファイルには書き込まない。`chisel username` / `chisel password`は手順3でのみ使うため、1Passwordへの保存は不要（1Password登録・手順3完了後は、ワークシートのI〜M列を消去してよい）。
 
-**エラーが出た場合**:
-- `このシステムではスクリプトの実行が無効になっているため...` → 通常のPowerShellで実行してしまっている。「Google Cloud SDK Shell」に切り替えて実行し直す
-- `The required property [project] is not currently set` → `gcloud config set project msp-zabbix` を実行してから、もう一度上記のコマンドを実行する
-- `Required 'compute.instances.get' permission...` または `does not have access to service account...` → 自分のGoogleアカウントにこのプロジェクトへのIAM権限がまだ付与されていない。担当エンジニアに、本ページ手順0「【権限のある担当者向け】新規メンバーへのGCP権限付与」の実施を依頼する
-- それ以外の認証エラー → `gcloud auth login` を実行してから再試行する
-- `add_customer.sh`の実行結果に **tinyproxy username / tinyproxy password が表示されない**場合 → `zabbix-server`上の`/etc/chisel/add_customer.sh`が古いバージョンのままである可能性が高い（2026-07-16に実際に発生）。作業を止めて担当エンジニアに連絡する（`chisel username`しか払い出されていない状態でそのまま手順3に進んではいけない）
+エラーが出た場合は[うまくいかない場合の「手順2でエラーが出る」](xref:guide-sensor-edge#手順2でエラーが出る)を参照。
 
 ---
 
@@ -620,10 +633,7 @@ Sensor Edge本体にブラウザではなくSSHで入りたい場合は、Chrome
 
 **注意**: Connection > Proxyの認証情報（tinyproxy）と、`login as:`後のSSH認証情報（atladmin＋秘密鍵）は**別物**。混同しないこと（Proxy欄に`atladmin`を入れると401エラーになる）。
 
-**うまくいかない場合**:
-- `Unable to use key file "..." (OpenSSH SSH-2 private key (new format))` → 鍵が未変換。手順0の「PuTTY用に変換する」を実施してから`.ppk`ファイルを指定し直す
-- `Proxy error: HTTP response 401 Unauthorized` → Connection > Proxyの認証情報が間違っている。1Password「pj-infra vision」保管庫のtinyproxy username/passwordを入れ直す（`atladmin`ではない）
-- `Server refused our key` → 鍵は正しく読み込めているが、指定した鍵がこのSensor Edgeの`authorized_keys`に登録されていない。atLIB共通鍵の正しいファイルを使っているか、担当エンジニアに確認する
+エラーが出た場合は[うまくいかない場合の「PuTTY接続でエラーが出る」](xref:guide-sensor-edge#PuTTY接続でエラーが出る)を参照。
 
 ---
 
@@ -697,6 +707,20 @@ Sensor Edge本体にブラウザではなくSSHで入りたい場合は、Chrome
 
 ## うまくいかない場合
 
+### 手順2でエラーが出る
+
+- `このシステムではスクリプトの実行が無効になっているため...` → 通常のPowerShellで実行してしまっている。「Google Cloud SDK Shell」に切り替えて実行し直す
+- `The required property [project] is not currently set` → `gcloud config set project msp-zabbix` を実行してから、もう一度上記のコマンドを実行する
+- `Required 'compute.instances.get' permission...` または `does not have access to service account...` → 自分のGoogleアカウントにこのプロジェクトへのIAM権限がまだ付与されていない。担当エンジニアに、本ページ手順0「【権限のある担当者向け】新規メンバーへのGCP権限付与」の実施を依頼する
+- それ以外の認証エラー → `gcloud auth login` を実行してから再試行する
+- `add_customer.sh`の実行結果に **tinyproxy username / tinyproxy password が表示されない**場合 → `zabbix-server`上の`/etc/chisel/add_customer.sh`が古いバージョンのままである可能性が高い（2026-07-16に実際に発生）。作業を止めて担当エンジニアに連絡する（`chisel username`しか払い出されていない状態でそのまま手順3に進んではいけない）
+
+### PuTTY接続でエラーが出る
+
+- `Unable to use key file "..." (OpenSSH SSH-2 private key (new format))` → 鍵が未変換。手順0の「PuTTY用に変換する」を実施してから`.ppk`ファイルを指定し直す
+- `Proxy error: HTTP response 401 Unauthorized` → Connection > Proxyの認証情報が間違っている。1Password「pj-infra vision」保管庫のtinyproxy username/passwordを入れ直す（`atladmin`ではない）
+- `Server refused our key` → 鍵は正しく読み込めているが、指定した鍵がこのSensor Edgeの`authorized_keys`に登録されていない。atLIB共通鍵の正しいファイルを使っているか、担当エンジニアに確認する
+
 ### 顧客先のブラウザ・SSHアクセスがタイムアウトする
 
 顧客先に発送済みの機器は、手順1・3で使った「同じLAN内から直接SSH」はできない（顧客のネットワーク内にあるため）。手順6と同じ方法でIAPトンネルを起動し、PuTTYのProxy設定（HTTP, hostname=`localhost`, Port=当該CHISEL_PORT, Username/Password=1Password「pj-infra vision」保管庫のtinyproxy認証情報）で接続し、以下を実行して復旧を試みる。
@@ -724,7 +748,7 @@ sudo systemctl restart tinyproxy
 - それでも分からない場合は担当エンジニアに連絡する
 </script>
 <script type="text/plain" id="src-guide-onboarding">
-最終更新: 2026-07-22
+最終更新: 2026-07-24
 対応する詳細仕様書: `msp-customer-portal/docs/運用手順書_顧客オンボーディング統合フロー.md`
 
 ## これは何の作業か
@@ -745,6 +769,8 @@ sudo systemctl restart tinyproxy
 | SNMP監視対象機器のおおよその台数 | 50台が目安の上限。超えそうな場合は担当エンジニアに相談 |
 
 また、`msp-frontend-server`にSSH接続できる環境が必要（手順3で使用）。
+
+手順0〜5を上から順に実施すればよい。[初回セットアップ](xref:guide-onboarding#初回セットアップ)・[うまくいかない場合](xref:guide-onboarding#うまくいかない場合)は、該当する時だけ参照する。
 
 ---
 
@@ -797,7 +823,7 @@ sudo systemctl restart tinyproxy
    ```bash
    cd /opt/atlib-msp-dev/zabbixserver/batch
    ```
-3. **操作**: 接続情報を読み込む（`~/zabbix_env.sh`が無い場合は先に作成する。下記「初回だけ必要な準備」を参照）
+3. **操作**: 接続情報を読み込む（`~/zabbix_env.sh`が無い場合は先に作成する。[初回セットアップ](xref:guide-onboarding#初回セットアップ)を参照）
    ```bash
    source ~/zabbix_env.sh
    ```
@@ -808,23 +834,6 @@ sudo systemctl restart tinyproxy
 5. **確認**: 3つのアクションが「作成済み」と表示されること
 6. **操作**: 問題なければ、手順2の出力にあった`--apply`のコマンドをそのまま貼り付けて実行する（先頭を`python`から`python3`に書き換える）
 7. **注意**: この手順はCloud Run（本番アプリ本体）からは実行できない。必ず`msp-frontend-server`にSSHした状態で実行すること
-
-### 初回だけ必要な準備（`~/zabbix_env.sh`が無い場合）
-
-1. **操作**: 以下をそのまま実行する（Secret Managerから直接値を取得するので、パスワードが画面に表示されることはない）
-   ```bash
-   cat > ~/zabbix_env.sh << 'ENVEOF'
-   export ZABBIX_URL="https://zabbix.atlib.jp/api_jsonrpc.php"
-   export ZABBIX_USER="$(gcloud secrets versions access latest --secret=portal-zabbix-user --project=msp-zabbix)"
-   export ZABBIX_PASSWORD="$(gcloud secrets versions access latest --secret=portal-zabbix-password --project=msp-zabbix)"
-   ENVEOF
-   chmod 600 ~/zabbix_env.sh
-   ```
-2. **注意**: 新しいSSHセッションを開くたびに、手順3の3.（`source ~/zabbix_env.sh`）が必要（ファイル自体は再作成不要）
-3. **`git pull`で`fatal: detected dubious ownership`というエラーが出た場合**: 以下を一度実行する（自分のアカウントで初めてこのリポジトリを操作する時に一度だけ必要）
-   ```bash
-   git config --global --add safe.directory /opt/atlib-msp-dev
-   ```
 
 ---
 
@@ -872,6 +881,33 @@ Sensor Edge側（機器回収・認証情報の失効）は `Sensor Edge/実施�
 ### 11-3. データの保持
 
 ポータルDBのレコードは`suspended`のまま一定期間保持し、その後の削除要否は担当エンジニアに確認する。
+
+---
+
+## 初回セットアップ
+
+普段の手順0〜5・11では不要。以下に該当する場合のみ、最初に1回だけ実施する。
+
+### `~/zabbix_env.sh`が無い場合（手順3で使用）
+
+1. **操作**: 以下をそのまま実行する（Secret Managerから直接値を取得するので、パスワードが画面に表示されることはない）
+   ```bash
+   cat > ~/zabbix_env.sh << 'ENVEOF'
+   export ZABBIX_URL="https://zabbix.atlib.jp/api_jsonrpc.php"
+   export ZABBIX_USER="$(gcloud secrets versions access latest --secret=portal-zabbix-user --project=msp-zabbix)"
+   export ZABBIX_PASSWORD="$(gcloud secrets versions access latest --secret=portal-zabbix-password --project=msp-zabbix)"
+   ENVEOF
+   chmod 600 ~/zabbix_env.sh
+   ```
+2. **注意**: 新しいSSHセッションを開くたびに、手順3の3.（`source ~/zabbix_env.sh`）が必要（ファイル自体は再作成不要）
+
+### `git pull`で`fatal: detected dubious ownership`というエラーが出る場合
+
+自分のアカウントで初めてこのリポジトリを操作する時に一度だけ必要。
+
+```bash
+git config --global --add safe.directory /opt/atlib-msp-dev
+```
 
 ---
 
@@ -3291,6 +3327,34 @@ Part Aを最初からやり直す。バージョン管理のため、`.img`フ�
     return '<a class="xref" href="#' + id + '" data-xref="1">' + label + "</a>";
   }
 
+  window.copyCode = function (btn) {
+    var pre = btn.closest("pre");
+    var code = pre.querySelector("code");
+    var text = code.textContent;
+    var done = function () {
+      var original = btn.textContent;
+      btn.textContent = "コピーしました";
+      btn.classList.add("copied");
+      setTimeout(function () {
+        btn.textContent = original;
+        btn.classList.remove("copied");
+      }, 1500);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, done);
+    } else {
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); } catch (e) {}
+      document.body.removeChild(ta);
+      done();
+    }
+  };
+
   // ---- block-level markdown parser ----
   function parseDoc(raw, slug, headings) {
     var lines = raw.replace(/\r\n/g, "\n").split("\n");
@@ -3306,16 +3370,24 @@ Part Aを最初からやり直す。バージョン管理のため、`.img`フ�
 
       if (/^\s*$/.test(line)) { i++; continue; }
 
-      // fenced code block
-      var fence = line.match(/^```(\S*)\s*$/);
+      // fenced code block (allows leading indentation, e.g. nested under a numbered list item)
+      var fence = line.match(/^(\s*)```(\S*)\s*$/);
       if (fence) {
-        var lang = fence[1] || "";
+        var indent = fence[1];
+        var lang = fence[2] || "";
         var buf = [];
         i++;
-        while (i < lines.length && !/^```\s*$/.test(lines[i])) { buf.push(lines[i]); i++; }
+        while (i < lines.length && !/^\s*```\s*$/.test(lines[i])) {
+          var contentLine = lines[i];
+          if (indent && contentLine.indexOf(indent) === 0) contentLine = contentLine.slice(indent.length);
+          buf.push(contentLine);
+          i++;
+        }
         i++; // skip closing fence
+        var codeText = buf.join("\n");
         html.push('<pre>' + (lang ? '<span class="lang">' + esc(lang) + "</span>" : "") +
-          "<code>" + esc(buf.join("\n")) + "</code></pre>");
+          '<button type="button" class="copy-btn" onclick="copyCode(this)">コピー</button>' +
+          "<code>" + esc(codeText) + "</code></pre>");
         continue;
       }
 

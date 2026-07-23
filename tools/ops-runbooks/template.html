@@ -271,6 +271,7 @@ body {
   word-break: break-word;
 }
 .doc pre {
+  position: relative;
   margin: 0 0 16px;
   background: var(--code-bg);
   border: 1px solid var(--code-border);
@@ -278,6 +279,23 @@ body {
   overflow-x: auto;
   box-shadow: var(--shadow);
 }
+.doc pre .copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-family: 'JBMono', ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: .03em;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--code-border);
+  background: var(--bg);
+  color: var(--muted);
+  cursor: pointer;
+  opacity: .75;
+}
+.doc pre .copy-btn:hover { opacity: 1; }
+.doc pre .copy-btn.copied { color: var(--accent, #2a9d5c); border-color: currentColor; opacity: 1; }
 .doc pre code {
   display: block;
   background: none;
@@ -481,6 +499,34 @@ a.xref-missing::after { content: ""; }
     return '<a class="xref" href="#' + id + '" data-xref="1">' + label + "</a>";
   }
 
+  window.copyCode = function (btn) {
+    var pre = btn.closest("pre");
+    var code = pre.querySelector("code");
+    var text = code.textContent;
+    var done = function () {
+      var original = btn.textContent;
+      btn.textContent = "コピーしました";
+      btn.classList.add("copied");
+      setTimeout(function () {
+        btn.textContent = original;
+        btn.classList.remove("copied");
+      }, 1500);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, done);
+    } else {
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); } catch (e) {}
+      document.body.removeChild(ta);
+      done();
+    }
+  };
+
   // ---- block-level markdown parser ----
   function parseDoc(raw, slug, headings) {
     var lines = raw.replace(/\r\n/g, "\n").split("\n");
@@ -496,16 +542,24 @@ a.xref-missing::after { content: ""; }
 
       if (/^\s*$/.test(line)) { i++; continue; }
 
-      // fenced code block
-      var fence = line.match(/^```(\S*)\s*$/);
+      // fenced code block (allows leading indentation, e.g. nested under a numbered list item)
+      var fence = line.match(/^(\s*)```(\S*)\s*$/);
       if (fence) {
-        var lang = fence[1] || "";
+        var indent = fence[1];
+        var lang = fence[2] || "";
         var buf = [];
         i++;
-        while (i < lines.length && !/^```\s*$/.test(lines[i])) { buf.push(lines[i]); i++; }
+        while (i < lines.length && !/^\s*```\s*$/.test(lines[i])) {
+          var contentLine = lines[i];
+          if (indent && contentLine.indexOf(indent) === 0) contentLine = contentLine.slice(indent.length);
+          buf.push(contentLine);
+          i++;
+        }
         i++; // skip closing fence
+        var codeText = buf.join("\n");
         html.push('<pre>' + (lang ? '<span class="lang">' + esc(lang) + "</span>" : "") +
-          "<code>" + esc(buf.join("\n")) + "</code></pre>");
+          '<button type="button" class="copy-btn" onclick="copyCode(this)">コピー</button>' +
+          "<code>" + esc(codeText) + "</code></pre>");
         continue;
       }
 
