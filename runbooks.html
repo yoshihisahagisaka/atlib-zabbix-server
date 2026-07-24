@@ -3355,6 +3355,29 @@ Part Aを最初からやり直す。バージョン管理のため、`.img`フ�
     }
   };
 
+  // Detects a fenced code block starting at lines[i] (any leading indentation, e.g.
+  // nested under a numbered/bulleted list item). Returns {html, next} or null.
+  function tryParseFence(lines, i) {
+    var fence = lines[i].match(/^(\s*)```(\S*)\s*$/);
+    if (!fence) return null;
+    var indent = fence[1];
+    var lang = fence[2] || "";
+    var buf = [];
+    i++;
+    while (i < lines.length && !/^\s*```\s*$/.test(lines[i])) {
+      var contentLine = lines[i];
+      if (indent && contentLine.indexOf(indent) === 0) contentLine = contentLine.slice(indent.length);
+      buf.push(contentLine);
+      i++;
+    }
+    i++; // skip closing fence
+    var codeText = buf.join("\n");
+    var htmlOut = '<pre>' + (lang ? '<span class="lang">' + esc(lang) + "</span>" : "") +
+      '<button type="button" class="copy-btn" onclick="copyCode(this)">コピー</button>' +
+      "<code>" + esc(codeText) + "</code></pre>";
+    return { html: htmlOut, next: i };
+  }
+
   // ---- block-level markdown parser ----
   function parseDoc(raw, slug, headings) {
     var lines = raw.replace(/\r\n/g, "\n").split("\n");
@@ -3371,23 +3394,10 @@ Part Aを最初からやり直す。バージョン管理のため、`.img`フ�
       if (/^\s*$/.test(line)) { i++; continue; }
 
       // fenced code block (allows leading indentation, e.g. nested under a numbered list item)
-      var fence = line.match(/^(\s*)```(\S*)\s*$/);
-      if (fence) {
-        var indent = fence[1];
-        var lang = fence[2] || "";
-        var buf = [];
-        i++;
-        while (i < lines.length && !/^\s*```\s*$/.test(lines[i])) {
-          var contentLine = lines[i];
-          if (indent && contentLine.indexOf(indent) === 0) contentLine = contentLine.slice(indent.length);
-          buf.push(contentLine);
-          i++;
-        }
-        i++; // skip closing fence
-        var codeText = buf.join("\n");
-        html.push('<pre>' + (lang ? '<span class="lang">' + esc(lang) + "</span>" : "") +
-          '<button type="button" class="copy-btn" onclick="copyCode(this)">コピー</button>' +
-          "<code>" + esc(codeText) + "</code></pre>");
+      var fenced = tryParseFence(lines, i);
+      if (fenced) {
+        html.push(fenced.html);
+        i = fenced.next;
         continue;
       }
 
@@ -3445,8 +3455,15 @@ Part Aを最初からやり直す。バージョン管理のため、`.img`フ�
         var olItems = [];
         while (i < lines.length && /^\s*\d+\.\s+/.test(lines[i])) {
           var itemLines = [lines[i].replace(/^\s*\d+\.\s+/, "")];
+          var itemBlocks = [];
           i++;
           while (i < lines.length && /^\s{3,}\S/.test(lines[i]) && !/^\s*[-\d]/.test(lines[i].trim())) {
+            var olFenced = tryParseFence(lines, i);
+            if (olFenced) {
+              itemBlocks.push(olFenced.html);
+              i = olFenced.next;
+              continue;
+            }
             itemLines.push(lines[i].trim());
             i++;
           }
@@ -3460,7 +3477,7 @@ Part Aを最初からやり直す。バージョン管理のため、`.img`フ�
             }
             nested = "<ul>" + nb.map(function (b) { return "<li>" + inline(b, headings) + "</li>"; }).join("") + "</ul>";
           }
-          olItems.push("<li>" + inline(itemLines.join(" "), headings) + nested + "</li>");
+          olItems.push("<li>" + inline(itemLines.join(" "), headings) + itemBlocks.join("") + nested + "</li>");
         }
         html.push("<ol>" + olItems.join("") + "</ol>");
         continue;
@@ -3471,8 +3488,15 @@ Part Aを最初からやり直す。バージョン管理のため、`.img`フ�
         var ulItems = [];
         while (i < lines.length && /^\s*-\s+/.test(lines[i])) {
           var uiLines = [lines[i].replace(/^\s*-\s+/, "")];
+          var uiBlocks = [];
           i++;
           while (i < lines.length && /^\s{2,}\S/.test(lines[i]) && !/^\s*-\s+/.test(lines[i])) {
+            var ulFenced = tryParseFence(lines, i);
+            if (ulFenced) {
+              uiBlocks.push(ulFenced.html);
+              i = ulFenced.next;
+              continue;
+            }
             uiLines.push(lines[i].trim());
             i++;
           }
@@ -3485,7 +3509,7 @@ Part Aを最初からやり直す。バージョン管理のため、`.img`フ�
             }
             nested2 = "<ul>" + nb2.map(function (b) { return "<li>" + inline(b, headings) + "</li>"; }).join("") + "</ul>";
           }
-          ulItems.push("<li>" + inline(uiLines.join(" "), headings) + nested2 + "</li>");
+          ulItems.push("<li>" + inline(uiLines.join(" "), headings) + uiBlocks.join("") + nested2 + "</li>");
         }
         html.push("<ul>" + ulItems.join("") + "</ul>");
         continue;
