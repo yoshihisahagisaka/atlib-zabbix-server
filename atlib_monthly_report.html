@@ -833,6 +833,48 @@ function loadEditableContent() {
 }
 
 /* ==================================================
+   運用対応履歴 — DBデータの読み取り専用表示
+   手動入力(EDIT_IDS/contenteditable/localStorage)とは独立した経路。
+   バッチ生成側がops_historyから取得したデータをpage.evaluate等で
+   注入する用途のみで、通常の手動操作フローからは一切呼ばれない。
+   ================================================== */
+function applyOpsHistoryEntries(entries) {
+  const tbody = document.getElementById('manual-support-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  if (!entries || entries.length === 0) {
+    const tr = document.createElement('tr');
+    tr.className = 'manual-row';
+    tr.innerHTML = '<td colspan="5"><div class="editable-cell">対応履歴なし</div></td>';
+    tbody.appendChild(tr);
+    return;
+  }
+
+  const fmt = (d) => {
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  entries.forEach(entry => {
+    const start = new Date(entry.occurredAt);
+    const end   = new Date(start.getTime() + (entry.minutesSpent || 0) * 60000);
+    const content = entry.description ? `${entry.category}：${entry.description}` : entry.category;
+
+    const tr = document.createElement('tr');
+    tr.className = 'manual-row';
+    tr.innerHTML = `
+      <td><div class="editable-cell">${fmt(start)}</div></td>
+      <td><div class="editable-cell">${fmt(end)}</div></td>
+      <td><div class="editable-cell">${content}</div></td>
+      <td><div class="editable-cell">${entry.operator}</div></td>
+      <td><div class="editable-cell">${entry.minutesSpent}</div></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+/* ==================================================
    Zabbix API ヘルパー
    ================================================== */
 async function zbxCall(method, params, id) {
@@ -1801,7 +1843,7 @@ function saveManualSelect(el) {
 /* ==================================================
    PPTX エクスポート
    ================================================== */
-async function exportToPPTX() {
+async function exportToPPTX(opts) {
   const btn = document.querySelector('.btn-pptx');
   const orig = btn.textContent;
   btn.textContent = '出力中...'; btn.style.background = '#78909c';
@@ -1834,6 +1876,9 @@ async function exportToPPTX() {
     }
     const custName = document.getElementById('lbl-customer').textContent || 'Unknown';
     const period   = document.getElementById('lbl-period').textContent.replace(/[^0-9年月]/g,'').replace('年','年').replace('月','月');
+    if (opts && opts.returnBase64) {
+      return await pptx.write('base64');
+    }
     await pptx.writeFile({ fileName: `atLIB_Monthly_Report_${custName}_${period}.pptx` });
   } catch (e) {
     console.error('exportToPPTX:', e);
