@@ -614,7 +614,11 @@ gcloud iam service-accounts add-iam-policy-binding 135863453696-compute@develope
 
 ### PuTTYでSSH接続する場合
 
-Sensor Edge本体にブラウザではなくSSHで入りたい場合は、Chromeの代わりにPuTTYを使う。**先にIAPトンネルを起動しておくこと**（上記手順3のbatファイルを一度実行するか、`gcloud compute start-iap-tunnel zabbix-server <ワークシートのport列(I列)の値> --local-host-port=localhost:<同じport> --zone=asia-northeast1-a --project=msp-zabbix`を別ウィンドウで実行しておく）。
+Sensor Edge本体にブラウザではなくSSHで入りたい場合は、Chromeの代わりにPuTTYを使う。**先にIAPトンネルを起動しておくこと**（上記手順3のbatファイルを一度実行するか、以下を別ウィンドウで実行しておく。`<ワークシートのport列(I列)の値>`は実際の値に置き換える）。
+
+```
+gcloud compute start-iap-tunnel zabbix-server <ワークシートのport列(I列)の値> --local-host-port=localhost:<同じport> --zone=asia-northeast1-a --project=msp-zabbix
+```
 
 1. **画面**: PuTTYを起動する
 2. **操作**: 左側のカテゴリツリーで **Session** を開き、以下を入力する
@@ -689,7 +693,10 @@ Sensor Edge本体にブラウザではなくSSHで入りたい場合は、Chrome
 
 **操作**（`<顧客ID>`はすべて実際の顧客IDに書き換える）:
 
-1. 手順2と同じ方法（`gcloud compute ssh zabbix-server --zone=asia-northeast1-a --tunnel-through-iap`）で`zabbix-server`にSSH接続する
+1. 手順2と同じ方法で`zabbix-server`にSSH接続する
+   ```
+   gcloud compute ssh zabbix-server --zone=asia-northeast1-a --tunnel-through-iap
+   ```
 2. **（接続後の画面で）** 台帳の該当行を「無効」に記録する
    ```bash
    sudo nano /etc/chisel/customer_ledger.csv
@@ -884,7 +891,7 @@ git config --global --add safe.directory /opt/atlib-msp-dev
 
 ---
 
-## 手順11: 契約終了時の後処理
+## 手順6: 契約終了時の後処理
 
 Sensor Edge側（機器回収・認証情報の失効）は `Sensor Edge/実施手順_顧客追加フロー.md` の手順10を参照。ここでは**ポータル側**の後処理のみ扱う。
 
@@ -1084,9 +1091,13 @@ Sensor Edge側（機器回収・認証情報の失効）は `Sensor Edge/実施�
 
 ## 手順4: 古いセッションをクリアする
 
-1. **画面/コマンド**: 以下をそのまま実行する（`<msp-frontend-serverの外部IP>`は担当エンジニアに確認するか、`gcloud compute instances describe zabbix-server --zone=asia-northeast1-a --format="value(networkInterfaces[0].accessConfigs[0].natIP)"`で調べる）
+1. **画面/コマンド**: 以下をそのまま実行する（`<msp-frontend-serverの外部IP>`は担当エンジニアに確認する）
    ```powershell
    ssh -i "$env:USERPROFILE\.ssh\google_compute_engine" yoshihisa_hagisaka@<msp-frontend-serverの外部IP> "sudo rm -f /tmp/atlib_zbx_token.cache"
+   ```
+2. **わからない場合**: 以下で最新の外部IPを調べる
+   ```powershell
+   gcloud compute instances describe zabbix-server --zone=asia-northeast1-a --format="value(networkInterfaces[0].accessConfigs[0].natIP)"
    ```
 
 ---
@@ -2044,7 +2055,7 @@ chmod 600 ~/zabbix_env.sh
 
 ---
 
-## 手順11: 契約終了時のポータル側後処理
+## 手順6: 契約終了時のポータル側後処理
 
 Sensor Edge側の機器回収・認証情報失効は`Sensor Edge/運用手順書_顧客追加フロー.md`手順10を参照（Chisel認証情報・Zabbix Proxy PSKの失効はそちらに従う）。本手順は、それと対になる**顧客ポータル側**の後処理を扱う。
 
