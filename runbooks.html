@@ -1912,6 +1912,8 @@ sudo systemctl restart systemd-resolved
 
 ①の申込みフォームは`msp-customer-portal`の一部として実装済み（`POST /api/customer-application`→`customer_applications`テーブルへ保存→担当者へ通知メール）。新着があると`config.customerApplicationNotifyEmail`宛にメールが届く。担当者は`/admin/customer-applications.html`（Basic認証）で内容を確認し、対応状況（未対応→連絡済→ヒアリング予定→完了）を更新しながら②③を進める。**②③自体（日程調整・ヒアリング実施）は引き続き人間が行う**（自動化していない）。申込みフォームで集める情報はヒアリング前の一次受付情報のみで、`customer_code`の割当や下表の技術的ヒアリング項目とは別管理（接続しない）。
 
+②③の実施手順（かんたん版）は[実施手順_顧客申込み受付.md](実施手順_顧客申込み受付.md)を参照。
+
 ③の完了時点で、以下が確定していることを前提に手順1以降を進める。
 
 | 項目 | 用途 |
@@ -3394,6 +3396,78 @@ PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB
 
 - 2026-08-03: 初版作成。顧客申込みフォーム機能（`customer_applications`テーブル・`/apply.html`）のデプロイ作業（マイグレーション適用・Cloud Run環境変数追加・再デプロイ）を実施した際、手順自体がどこにも文書化されていなかったため新設。あわせて`msp-frontend-server`の`.env`が`config.ts`の必須値追加に追従しておらず`npm run migrate`が失敗する問題を発見・解消し、再発防止のチェックリスト（手順3）を追加した。
 </script>
+<script type="text/plain" id="src-guide-application-intake">
+最終更新: 2026-08-03
+対応する詳細仕様書: `msp-customer-portal/docs/運用手順書_顧客オンボーディング統合フロー.md` 手順0
+
+## これは何の作業か
+
+Webサイトの申込みフォーム（`/apply.html`）から届いた新規申込みに対応し、ヒアリング（Web会議）でプラン・IPレンジ等を確定させるまでの作業。ここが完了したら、[実施手順_顧客オンボーディング統合フロー.md](実施手順_顧客オンボーディング統合フロー.md)の手順0（顧客ID割り当て）以降に引き継ぐ。
+
+## 始める前に
+
+管理画面（`/admin/customer-applications.html`）はBasic認証で保護されている。ログイン用のユーザー名・パスワードが分からない場合は、以下を1回だけ実行して確認する（Google Cloud SDK Shellまたは`gcloud`が使えるターミナルで実行。値は画面に表示されるので他人に見せないこと）。
+
+```bash
+gcloud secrets versions access latest --secret=portal-admin-user --project=msp-zabbix
+gcloud secrets versions access latest --secret=portal-admin-password --project=msp-zabbix
+```
+
+以降は手順1〜4を上から順に実施すればよい。エラーが出た場合のみ[うまくいかない場合](#うまくいかない場合)を参照する。
+
+---
+
+## 手順1: 新着申込みに気づく
+
+1. **操作**: 新規申込みがあると、`sales@atlib.jp`宛に件名「【新規申込み】〇〇株式会社 様」というメールが自動で届く
+2. **操作**: メール本文末尾の「詳細を管理画面で確認: https://...」のリンクをクリックする（Basic認証のユーザー名・パスワード入力を求められたら、上記「始める前に」で確認した値を入力する）
+3. 上記リンクを使わない場合は、ブラウザで `https://portal.atlib.jp/admin/customer-applications.html` を直接開いてもよい（一覧画面が表示される）
+
+## 手順2: 内容を確認し、対応状況を「連絡済」に更新する
+
+1. **画面**: 一覧画面で対応状況が「未対応」になっている行をクリックし、詳細画面を開く
+2. **確認**: 会社名・担当者名・メール・電話番号・興味のあるプラン・ご要望備考を確認する
+3. **操作**: 記載された連絡先（メール・電話）へ連絡し、ヒアリング（Web会議）の日程を調整する
+4. **操作**: 詳細画面の「対応状況」プルダウンで**「連絡済」**を選び、「保存する」ボタンを押す
+5. 日程が確定したら、同じ手順で対応状況を**「ヒアリング予定」**に更新しておく（必須ではないが、他の担当者が見た時に状況が分かるようにするため）
+
+## 手順3: ヒアリング（Web会議）を実施する
+
+1. **操作**: Web会議で、顧客のネットワーク環境・監視対象機器のおおよその台数・希望プランを確認し、以下を確定させる
+
+   | 確定させる項目 | 例 |
+   |---|---|
+   | `company_name`（正式名称） | `atLIB株式会社様` |
+   | 連絡先メールアドレス | |
+   | プラン名 | `エントリープラン` |
+   | 顧客のネットワークのIPレンジ | `192.168.1.1-254` |
+   | SNMP監視対象機器のおおよその台数 | 50台が目安の上限。超えそうな場合は担当エンジニアに相談 |
+
+2. **注意**: 監視対象機器が50台を超えそうな場合は、標準構成では対応できない可能性があるため、実施手順に進む前に担当エンジニアに相談する
+
+## 手順4: 対応状況を「完了」にし、次の作業に引き継ぐ
+
+1. **操作**: 詳細画面の「対応状況」プルダウンで**「完了」**を選び、「保存する」ボタンを押す
+2. **操作**: [実施手順_顧客オンボーディング統合フロー.md](実施手順_顧客オンボーディング統合フロー.md)を開き、手順0（顧客マスタで顧客IDを割り当てる）から作業を続ける。手順3で確定した項目（company_name・連絡先・プラン名・IPレンジ・機器台数）はそのままそちらの「始める前に」の表に使う
+
+---
+
+## うまくいかない場合
+
+### 管理画面（`/admin/customer-applications.html`）にログインできない
+
+ユーザー名・パスワードが間違っている可能性が高い。「始める前に」のコマンドを再実行し、値を再確認する（コピー&ペースト時に前後の空白が入っていないか注意）。
+
+### 通知メールが届かない
+
+- 迷惑メールフォルダを確認する
+- それでも見つからない場合は、`/admin/customer-applications.html`を直接開いて一覧に新着が出ているか確認する（メール送信自体は失敗してもフォーム送信そのものは正常に記録される仕組みのため、一覧には出ているはずである）
+- 一覧にも出ていない場合は、担当エンジニアに連絡する
+
+### 一覧画面が真っ白・エラーが出る
+
+ページを再読み込みする。改善しない場合は担当エンジニアに連絡する。
+</script>
 
 <script>
 (function () {
@@ -3409,6 +3483,7 @@ PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB
     { slug: "guide-psk-proxy",   group: "guide", tag: "06", title: "Zabbix Proxy PSK ローテーション" },
     { slug: "guide-backup-dr",   group: "guide", tag: "07", title: "バックアップ・DR方針 定期確認" },
     { slug: "guide-device-mgmt", group: "guide", tag: "08", title: "機器管理・故障履歴・問い合わせ管理" },
+    { slug: "guide-application-intake", group: "guide", tag: "09", title: "顧客申込み受付・ヒアリング調整" },
     { slug: "sensor-edge", group: "spec", tag: "01", title: "Sensor Edge 構築・顧客追加" },
     { slug: "onboarding",  group: "spec", tag: "02", title: "顧客オンボーディング統合フロー" },
     { slug: "deploy",      group: "spec", tag: "03", title: "zabbixserver デプロイ" },
@@ -3438,7 +3513,8 @@ PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB
     "運用手順書_機器管理システム.md": "device-mgmt",
     "実施手順_機器管理システム.md": "guide-device-mgmt",
     "運用手順書_ベースイメージ作成.md": "base-image",
-    "運用手順書_ポータルデプロイ.md": "portal-deploy"
+    "運用手順書_ポータルデプロイ.md": "portal-deploy",
+    "実施手順_顧客申込み受付.md": "guide-application-intake"
   };
 
   function esc(s) {

@@ -12,6 +12,7 @@ $docs = @{
   "__DOC_ONBOARDING__"  = "$repo\msp-customer-portal\docs\運用手順書_顧客オンボーディング統合フロー.md"
   "__DOC_DEPLOY__"      = "$repo\zabbixserver\運用手順書_デプロイ.md"
   "__DOC_PORTAL_DEPLOY__" = "$repo\msp-customer-portal\docs\運用手順書_ポータルデプロイ.md"
+  "__GUIDE_APPLICATION_INTAKE__" = "$repo\msp-customer-portal\docs\実施手順_顧客申込み受付.md"
   "__DOC_PW_ADMIN__"    = "$repo\msp-frontend-server\運用手順書_Zabbix管理者パスワードローテーション.md"
   "__DOC_PW_DB__"       = "$repo\msp-frontend-server\運用手順書_zabbix-server_DBパスワードローテーション.md"
   "__DOC_PSK_PROXY__"   = "$repo\msp-frontend-server\運用手順書_ZabbixProxy_PSKローテーション.md"
