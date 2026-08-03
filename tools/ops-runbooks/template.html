@@ -399,6 +399,7 @@ a.xref-missing::after { content: ""; }
 <script type="text/plain" id="src-backup-dr">__DOC_BACKUP_DR__</script>
 <script type="text/plain" id="src-device-mgmt">__DOC_DEVICE_MGMT__</script>
 <script type="text/plain" id="src-base-image">__DOC_BASE_IMAGE__</script>
+<script type="text/plain" id="src-portal-deploy">__DOC_PORTAL_DEPLOY__</script>
 
 <script>
 (function () {
@@ -422,7 +423,8 @@ a.xref-missing::after { content: ""; }
     { slug: "psk-proxy",   group: "spec", tag: "06", title: "Zabbix Proxy PSK ローテーション" },
     { slug: "backup-dr",   group: "spec", tag: "07", title: "バックアップ・DR方針" },
     { slug: "device-mgmt", group: "spec", tag: "08", title: "機器管理・故障履歴・問い合わせ管理" },
-    { slug: "base-image",  group: "spec", tag: "09", title: "Sensor Edge ベースイメージ作成" }
+    { slug: "base-image",  group: "spec", tag: "09", title: "Sensor Edge ベースイメージ作成" },
+    { slug: "portal-deploy", group: "spec", tag: "10", title: "msp-customer-portal デプロイ" }
   ];
   var FILENAME_TO_SLUG = {
     "運用手順書_顧客追加フロー.md": "sensor-edge",
@@ -441,7 +443,8 @@ a.xref-missing::after { content: ""; }
     "実施手順_バックアップDR方針.md": "guide-backup-dr",
     "運用手順書_機器管理システム.md": "device-mgmt",
     "実施手順_機器管理システム.md": "guide-device-mgmt",
-    "運用手順書_ベースイメージ作成.md": "base-image"
+    "運用手順書_ベースイメージ作成.md": "base-image",
+    "運用手順書_ポータルデプロイ.md": "portal-deploy"
   };
 
   function esc(s) {

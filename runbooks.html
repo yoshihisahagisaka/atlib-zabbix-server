@@ -382,7 +382,7 @@ a.xref-missing::after { content: ""; }
       <button class="theme-btn" id="themeToggle" type="button" aria-label="配色を切り替え">
         <span id="themeIcon">◐</span><span id="themeLabel">配色を切替</span>
       </button>
-      <p class="gen-note">上段「操作ガイド」は非技術者向けの実施手順、下段「運用仕様書」は詳細な技術背景です。文中の水色リンクをクリックすると該当箇所へ移動します。生成日: 2026-07-24</p>
+      <p class="gen-note">上段「操作ガイド」は非技術者向けの実施手順、下段「運用仕様書」は詳細な技術背景です。文中の水色リンクをクリックすると該当箇所へ移動します。生成日: 2026-08-03</p>
     </div>
   </nav>
   <main class="main" id="main"></main>
@@ -1890,6 +1890,7 @@ sudo systemctl restart systemd-resolved
 - `msp-customer-portal\scripts\onboarding\create_customer.ts`（本手順の手順2で実行する）
 - `zabbixserver\batch\setup_discovery.py`（本手順の手順3で実行する）
 - `msp-frontend-server\運用手順書_バックアップDR方針.md`（ポータルDBのバックアップ・死活監視について）
+- [運用手順書_ポータルデプロイ.md](運用手順書_ポータルデプロイ.md)（`msp-customer-portal`自体のコード変更・DBマイグレーションの反映手順）
 
 本ドキュメントは、実顧客のオンボーディングにあたり「申込み確定後」から「監視開始確認」までを1本の時系列手順として整理したものである。`msp-customer-portal`（顧客ポータル）と`Sensor Edge`（顧客拠点設置の物理監視ゲートウェイ）という、これまで別々に運用されていた2つの仕組みをつなぐ位置づけ。
 
@@ -1897,17 +1898,19 @@ sudo systemctl restart systemd-resolved
 
 ## 手順0: 前提プロセス（参照のみ・本ドキュメントの対象外）
 
-以下は本ドキュメントが扱う技術的オンボーディングの**前提として完了しているべき**業務プロセスであり、実施自体は別プロセス（サービスLP・申込みフォームは今後別途作成予定）。
+以下は本ドキュメントが扱う技術的オンボーディングの**前提として完了しているべき**業務プロセスである。
 
 ```
-①申込みフォーム送信
+①申込みフォーム送信（/apply.html。2026-07-24〜実在）
   ↓
-②ヒアリング日程調整
+②担当者が /admin/customer-applications.html で新着を確認し、ヒアリング日程調整
   ↓
 ③Web会議でatLIB担当者が顧客のネットワーク環境・監視対象機器台数を確認し、プランを確定
   ↓
 ④（本ドキュメントの手順1へ）
 ```
+
+①の申込みフォームは`msp-customer-portal`の一部として実装済み（`POST /api/customer-application`→`customer_applications`テーブルへ保存→担当者へ通知メール）。新着があると`config.customerApplicationNotifyEmail`宛にメールが届く。担当者は`/admin/customer-applications.html`（Basic認証）で内容を確認し、対応状況（未対応→連絡済→ヒアリング予定→完了）を更新しながら②③を進める。**②③自体（日程調整・ヒアリング実施）は引き続き人間が行う**（自動化していない）。申込みフォームで集める情報はヒアリング前の一次受付情報のみで、`customer_code`の割当や下表の技術的ヒアリング項目とは別管理（接続しない）。
 
 ③の完了時点で、以下が確定していることを前提に手順1以降を進める。
 
@@ -2170,6 +2173,7 @@ Zabbix Proxyオブジェクト自体の削除・PSK失効は`Sensor Edge/運用�
 - 2026-07-22（同日追記）: 実際に登録された顧客（atlse000001）のホストグループ・ディスカバリ結果をatLIBと比較したところ、2件の問題を発見・修正。(1) `--plan`引数によるプラン別ホストサブグループ作成機能は、作成されるだけで機器を追加する仕組みが無く常に空のまま残る未使用機能だったため廃止（`create_customer.ts`・顧客追加ワークシートの数式から削除）。(2) 前回復旧した「テストルール」のSNMPチェックが1件（sysDescr）しかなく、atLIBの実運用ルール（sysName・sysObjectID の2件）と異なっていたため、一部機器（ルーター等）がディスカバリで検出されない不具合が発生していた。「テストルール」および既存顧客（atlse000001）の実ルールをatLIBと同じ2件構成に修正し、`setup_discovery.py`に複製元のSNMPチェック件数が不足している場合は停止する安全チェックを追加した。
 - 2026-07-23: atlse000001の特定機器（ルーター1台）がディスカバリで検出されない事象を詳細調査（ネットワーク疎通・SNMP疎通・ルール構成・ルーター側IDS/IPS・Zabbix Proxyデバッグログ・競合ルールの無効化テストまで実施。この時点では根本原因は未特定。**続報: 翌日07-24に根本原因を特定・解決、下記参照**）。調査の過程で、**`--proxy-id`が他顧客と重複すると、ZabbixがIP・インターフェース・Proxyの一致を基準に既存ホストへ別顧客のホストグループを追加登録してしまう**（顧客間のデータ越境）ことを実機で確認。`setup_discovery.py`に、指定された`--proxy-id`が既に他顧客のルールで使用中の場合エラーで停止する安全チェックを追加した。あわせてatlse000001のZabbix側オブジェクト・ポータルDBレコードを一式削除し、修正後のスクリプトで別アカウント（松本知世）によるオンボーディング再検証を実施、`--dry-run`が正常に完了することを確認した。
 - 2026-07-24: 上記のルーター未検出事象の根本原因を特定・恒久対策済み。Zabbixサーバーのログに`process_discovery_data_contents(): "_gateway" is not a valid hostname`というエラーを発見し、そこから特定。原因は、Sensor Edge機の`systemd-resolved`が、自身のデフォルトゲートウェイ（＝顧客のルーター）への逆引きDNSに対して、実際のDNS名の代わりに`_gateway`という合成レコードを返す仕様であること。ZabbixサーバーはSNMP等のチェックには正常応答していても、この`_gateway`をホスト名として使おうとして検証エラーとなり、当該IPのディスカバリ結果ごと破棄していた。実機のtcpdumpでSNMP応答（`atl-router02`）が正しく返っていることを確認した上で、Zabbixサーバーログから特定した。2026-07-14の`base-image-setup.sh`変更（DNSサーバーの明示設定）以降に作られた機体で発生する。`/etc/systemd/resolved.conf`に`DNSStubListener=no`を設定することで解決を実機確認済み。`Sensor Edge/base-image-setup.sh`・`kitting-script.sh`の両方に恒久対策として追加した。**同日、atlse000001のホストグループ・ディスカバリルール・アクション・ポータルDBレコードを一式削除した上で、修正後の一連のスクリプト（`npm run onboard`→`setup_discovery.py --apply`）でオンボーディングを最初からやり直し、ルーターを含む全機器が正しく検出されることを実機で最終確認した。**
+- 2026-07-24（同日追記）: 契約〜申込み〜オンボーディングの仕組み化第一段階として、手順0の「①申込みフォーム送信」を実装（`msp-customer-portal`に`/apply.html`公開フォーム＋`/admin/customer-applications.html`管理画面を追加。既存の「ISMS診断フォーム」と同じ構造：公開フォーム→`customer_applications`テーブルへINSERT→担当者へ通知メール→Basic認証の管理画面でステータス管理）。ヒアリング日程調整・ヒアリング実施自体は引き続き人間が行う（自動化対象外）。デプロイ時は新規マイグレーション`006_customer_applications.sql`の適用と、環境変数`CUSTOMER_APPLICATION_NOTIFY_EMAIL`の設定が必須（未設定だとポータル全体が起動時エラーで落ちる）。
 </script>
 <script type="text/plain" id="src-deploy">
 最終更新: 2026-07-11
@@ -3288,6 +3292,108 @@ Part Aを最初からやり直す。バージョン管理のため、`.img`フ�
 - 2026-07-14: 実機検証で、overlayrootをベースイメージ作成時に有効化すると`/etc`配下への書き込みが再起動のたびに消え、SSHホスト鍵の自動再生成もキッティングの設定投入も機能しなくなる不具合が判明。overlayrootの有効化とSSHホスト鍵/machine-idの再生成を、Part A（ベースイメージ作成）からPart B（`kitting-script.sh`、全設定投入後の最終ステップ）に移動。
 - 2026-07-14（同日追記）: Pi5パイロット機でPart A〜Bを最初から通しで実施し、上記の修正が正しく機能することを確認。あわせて以下4件の不備を発見し`base-image-setup.sh`に反映（すべて全台共通の値のため）：(1) `/var/lib/zabbix`ディレクトリが存在せず`DBName`も相対パスのままでSQLite DB作成に失敗、(2) `TLSConnect`/`TLSAccept`/`TLSPSKFile`がコメントアウトされたままでPSK暗号化が有効にならない、(3) `ssh.socket`と`ssh.service`が両方enabledでポート22を取り合い、`dpkg --configure -a`が失敗する、(4) `Server=127.0.0.1`のまま（`zabbix.atlib.jp`に固定する必要がある）。修正後、`atlib-proxy-01`としてZabbix管理画面でAvailable（オンライン）になることを確認済み。
 </script>
+<script type="text/plain" id="src-portal-deploy">
+最終更新: 2026-08-03
+関連ドキュメント:
+- [運用手順書_顧客オンボーディング統合フロー.md](運用手順書_顧客オンボーディング統合フロー.md)（`npm run onboard`はこちらの手順2で実行する）
+- [../../msp-frontend-server/運用手順書_バックアップDR方針.md](../../msp-frontend-server/運用手順書_バックアップDR方針.md)（Cloud Runのバックアップ考え方・死活監視について）
+
+## 前提となる構成
+
+- 本体: Cloud Runサービス `msp-customer-portal`（project: `msp-zabbix`、region: `asia-northeast1`）
+- コンテナイメージはソースからその都度ビルドされる（`gcloud run deploy --source=.`）。CI/CDパイプラインは無く、開発者のローカル端末から手動デプロイする運用
+- DB（`msp-customer-portal-db`、Cloud SQL）へのマイグレーション・オンボーディングスクリプト（`npm run migrate` / `npm run onboard`）は、Cloud Runコンテナ内からではなく、`msp-frontend-server`（GCE VM）にSSHして実行する
+  - このVMには`msp-customer-portal`がgit sparse-checkoutで`/opt/atlib-msp-dev/msp-customer-portal`に配置済み、`npm install`済み
+  - 本番のSecret Managerから生成した`.env`が同ディレクトリに存在する（git管理外）
+  - `cloud-sql-proxy.service`が`127.0.0.1:5432`で常駐し、本番DBへ中継している（追加の起動操作は不要）
+- 環境変数の管理は2箇所に分かれている（**手順3で詳述する落とし穴の元**）:
+  1. Cloud Runサービス本体（実際にユーザーがアクセスするアプリが読む値）
+  2. `msp-frontend-server`上の`.env`（`npm run migrate`/`npm run onboard`を手動実行する時だけ読む値）
+
+---
+
+## 手順1: 通常のデプロイ（コード変更のみ、DBマイグレーション無し）
+
+1. コード変更をコミット・pushする
+2. ローカル端末の`msp-customer-portal`ディレクトリで実行する
+   ```bash
+   gcloud run deploy msp-customer-portal --source=. --region=asia-northeast1 --project=msp-zabbix
+   ```
+3. 反映確認
+   ```bash
+   curl -sk -o /dev/null -w 'HTTP %{http_code}\n' https://msp-customer-portal-135863453696.asia-northeast1.run.app/healthz/
+   ```
+   （`/healthz`ではなく**末尾スラッシュ付き`/healthz/`**が正しいエンドポイント。理由は「トラブルシューティング」参照）
+
+## 手順2: DBマイグレーションを伴うデプロイ（新しいテーブル・列を追加した場合）
+
+1. コード変更（マイグレーションファイル`migrations/*.sql`含む）をコミット・push
+2. `msp-frontend-server`にSSHしてマイグレーションを先に適用する
+   ```bash
+   gcloud compute ssh msp-frontend-server --zone=asia-northeast1-a --tunnel-through-iap
+   cd /opt/atlib-msp-dev
+   git pull
+   cd msp-customer-portal
+   npm install   # package.jsonに変更があった場合のみ必要。無ければスキップ可
+   npm run migrate
+   ```
+3. `config.ts`に新しい必須環境変数（`required(...)`で読むもの）を追加した場合は、ここで**手順3**を先に済ませてから`npm run migrate`を実行する（さもないと`Missing required config value`で即失敗する）
+4. マイグレーション成功を確認後、手順1と同様にCloud Runへデプロイする
+   ```bash
+   gcloud run deploy msp-customer-portal --source=. --region=asia-northeast1 --project=msp-zabbix
+   ```
+
+## 手順3: 新しい必須環境変数（`config.ts`の`required(...)`）を追加した場合の反映チェックリスト
+
+`src/config.ts`の`loadConfig()`は、`required()`で読んでいる値が1つでも欠けていると**アプリ全体が起動時に例外で落ちる**（該当ルートだけでなく全体障害になる）。新しい必須値を追加したら、以下の**2箇所両方**に反映すること。片方だけ反映して「動いたから大丈夫」と判断しないこと（もう片方は`npm run migrate`/`npm run onboard`を次に手動実行する人が初めて気づく形で失敗する）。
+
+1. **Cloud Runサービス本体**（本番ユーザーが実際にアクセスする側）
+   ```bash
+   gcloud run services update msp-customer-portal --region=asia-northeast1 --project=msp-zabbix \
+     --update-env-vars=<KEY>=<value>
+   ```
+   秘匿性の高い値（パスワード等）はSecret Manager経由にする（既存の`portal-jwt-secret`等と同じパターン。`src/config.ts`の`resolveSecret()`を参照）。メールアドレス等の非秘匿値は`--update-env-vars`で直接設定してよい。
+2. **`msp-frontend-server`上の`.env`**（`npm run migrate`/`npm run onboard`を手動実行する時だけ使う）
+   ```bash
+   gcloud compute ssh msp-frontend-server --zone=asia-northeast1-a --tunnel-through-iap
+   cd /opt/atlib-msp-dev/msp-customer-portal
+   grep -q "^<KEY>=" .env || echo "<KEY>=<value>" >> .env
+   ```
+
+反映確認: `.env`に登録済みのキー一覧（値は表示しない）
+```bash
+cut -d= -f1 .env | sort
+```
+`src/config.ts`の`required(...)`呼び出し一覧と突き合わせて、抜けがないか確認する。
+
+---
+
+## トラブルシューティング
+
+### `npm run migrate` / `npm run onboard`が`Missing required config value: XXX`で失敗する
+
+`msp-frontend-server`上の`.env`に、その環境変数が登録されていない。手順3の「2. `msp-frontend-server`上の`.env`」を実施する。
+
+**背景**: `.env`はSecret Manager等から自動生成されたものではなく、過去のある時点で一度作成されたきり手動更新が必要なファイル。`config.ts`に必須値を追加しても`.env`側は自動追従しないため、時間が経つほど両者がズレていく。2026-08-03、`CUSTOMER_APPLICATION_NOTIFY_EMAIL`（顧客申込みフォーム機能で追加）と`MONTHLY_REPORT_FROM_EMAIL`（月次レポート機能で追加）の2つが未登録のまま放置されていたことが判明し、追記して解消した。
+
+### ルートURL直下の`/healthz`が404になる
+
+正しいエンドポイントは末尾スラッシュ付きの`/healthz/`（`server.ts`の`app.get('/healthz', ...)`はExpress上は末尾スラッシュ無しにもマッチするはずだが、Cloud RunのURL経由では末尾スラッシュ無しは404になる挙動を2026-08-03に確認済み。原因未特定・実害無し。死活監視（Uptime Check）も`/healthz/`を対象にしている）。
+
+### デプロイ検証時に投入したテストデータが残ってしまった場合
+
+Cloud SQL Auth Proxy経由で直接削除する（`運用手順書_顧客オンボーディング統合フロー.md`手順6-1と同じ接続方法）。
+```bash
+gcloud compute ssh msp-frontend-server --zone=asia-northeast1-a --tunnel-through-iap
+cd /opt/atlib-msp-dev/msp-customer-portal
+set -a; source .env; set +a
+PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "DELETE FROM <table> WHERE <条件>;"
+```
+
+## 変更履歴
+
+- 2026-08-03: 初版作成。顧客申込みフォーム機能（`customer_applications`テーブル・`/apply.html`）のデプロイ作業（マイグレーション適用・Cloud Run環境変数追加・再デプロイ）を実施した際、手順自体がどこにも文書化されていなかったため新設。あわせて`msp-frontend-server`の`.env`が`config.ts`の必須値追加に追従しておらず`npm run migrate`が失敗する問題を発見・解消し、再発防止のチェックリスト（手順3）を追加した。
+</script>
 
 <script>
 (function () {
@@ -3311,7 +3417,8 @@ Part Aを最初からやり直す。バージョン管理のため、`.img`フ�
     { slug: "psk-proxy",   group: "spec", tag: "06", title: "Zabbix Proxy PSK ローテーション" },
     { slug: "backup-dr",   group: "spec", tag: "07", title: "バックアップ・DR方針" },
     { slug: "device-mgmt", group: "spec", tag: "08", title: "機器管理・故障履歴・問い合わせ管理" },
-    { slug: "base-image",  group: "spec", tag: "09", title: "Sensor Edge ベースイメージ作成" }
+    { slug: "base-image",  group: "spec", tag: "09", title: "Sensor Edge ベースイメージ作成" },
+    { slug: "portal-deploy", group: "spec", tag: "10", title: "msp-customer-portal デプロイ" }
   ];
   var FILENAME_TO_SLUG = {
     "運用手順書_顧客追加フロー.md": "sensor-edge",
@@ -3330,7 +3437,8 @@ Part Aを最初からやり直す。バージョン管理のため、`.img`フ�
     "実施手順_バックアップDR方針.md": "guide-backup-dr",
     "運用手順書_機器管理システム.md": "device-mgmt",
     "実施手順_機器管理システム.md": "guide-device-mgmt",
-    "運用手順書_ベースイメージ作成.md": "base-image"
+    "運用手順書_ベースイメージ作成.md": "base-image",
+    "運用手順書_ポータルデプロイ.md": "portal-deploy"
   };
 
   function esc(s) {
