@@ -333,18 +333,19 @@ body.export-mode .btn{display:none!important;}
       <table class="report-table">
         <thead>
           <tr>
-            <th style="width:14%;">ホスト名</th>
-            <th style="width:11%;">管理IP</th>
-            <th style="width:22%;">機器概要 (型番)</th>
-            <th style="width:8%;">FW</th>
-            <th style="width:13%;">稼働時間</th>
-            <th style="width:12%;">脆弱性</th>
-            <th style="width:11%;">EoL</th>
-            <th style="width:9%;">対応要否</th>
+            <th style="width:12%;">ホスト名</th>
+            <th style="width:10%;">管理IP</th>
+            <th style="width:16%;">機器概要 (型番)</th>
+            <th style="width:7%;">FW</th>
+            <th style="width:11%;">稼働時間</th>
+            <th style="width:11%;">脆弱性</th>
+            <th style="width:9%;">EoL</th>
+            <th style="width:14%;">開放ポート</th>
+            <th style="width:10%;">対応要否</th>
           </tr>
         </thead>
         <tbody id="slide-inventory-tbody">
-          <tr><td colspan="8" style="text-align:center;color:#78909c;padding:30px;">「データ同期」ボタンを押してください</td></tr>
+          <tr><td colspan="9" style="text-align:center;color:#78909c;padding:30px;">「データ同期」ボタンを押してください</td></tr>
         </tbody>
       </table>
     </div>
@@ -978,7 +979,10 @@ async function refreshReportData() {
 
     /* ---- ①-b 新規検出機器の履歴取得 ---- */
     showStatus('info', '新規検出機器の履歴を取得中...');
-    await _loadNewDeviceHistory(gSel.value);
+    const druleidForPorts = await _loadNewDeviceHistory(gSel.value);
+
+    /* ---- ①-c 開放ポート一覧取得（初期健全性チェック） ---- */
+    const openPortsByIp = await _fetchOpenPortsByIp(druleidForPorts);
 
     /* ---- ② ホスト＋アイテム取得 ---- */
     showStatus('info', 'ホスト・アイテム情報取得中...');
@@ -986,7 +990,7 @@ async function refreshReportData() {
       hostids: reqHost, groupids: reqGroup,
       output: ['hostid','name'],
       selectInterfaces: ['ip'],
-      selectInventory: ['date_hw_expiry'],
+      selectInventory: ['date_hw_expiry', 'vendor', 'model', 'software_full'],
       selectTags: 'extend',
       selectTriggers: ['description','value']
     }, 31);
@@ -1016,7 +1020,7 @@ async function refreshReportData() {
     }, 2) : [];
 
     /* ---- ③ 各スライド描画 ---- */
-    _renderInventory(allH, items);
+    _renderInventory(allH, items, openPortsByIp);
     _buildTopologyData(allH, items);
     _renderTopologyMap();
 
@@ -1136,6 +1140,8 @@ const DISCOVERY_PORT_LABELS = {
   '515':  'TCP 515 (プリンター/LPR)',
   '631':  'TCP 631 (プリンター/IPP)',
   '22':   'TCP 22 (SSH)',
+  '23':   'TCP 23 (Telnet)',
+  '80':   'TCP 80 (HTTP)',
   '445':  'TCP 445 (SMB)',
   '3389': 'TCP 3389 (RDP)',
   '3493': 'TCP 3493 (UPS)',
@@ -1143,38 +1149,74 @@ const DISCOVERY_PORT_LABELS = {
   '443':  'TCP 443 (HTTPS)',
 };
 
+/* 開放ポート一覧（初期健全性チェック）用の短縮ラベル。テーブルセル内に複数バッジで
+   並べるため、DISCOVERY_PORT_LABELSより短い表記にする。 */
+const OPEN_PORT_SHORT_LABELS = {
+  '161':  'SNMP',
+  '9100': 'RAW',
+  '515':  'LPR',
+  '631':  'IPP',
+  '22':   'SSH',
+  '23':   'Telnet',
+  '80':   'HTTP',
+  '445':  'SMB',
+  '3389': 'RDP',
+  '3493': 'UPS',
+  '10050':'Agent',
+  '443':  'HTTPS',
+};
+/* 暗号化なしの管理アクセスとして警告表示するポート */
+const RISKY_OPEN_PORTS = new Set(['23', '80']);
+
+/* 顧客グループに対応するディスカバリルールIDを、SNMP機器登録アクションの条件(ディスカバリ
+   ルール)から特定する。新規検出履歴・開放ポート一覧（初期健全性チェック）の両方で使う共通処理。 */
+async function _resolveDruleId(groupId) {
+  const actions = await zbxCall('action.get', {
+    output: ['actionid', 'name'],
+    search: { name: 'MSP_SNMP機器登録_' },
+    selectFilter: 'extend',
+    selectOperations: 'extend',
+    filter: { eventsource: 1 }
+  }, 40);
+
+  const match = actions.find(a =>
+    (a.operations || []).some(op => (op.opgroup || []).some(g => g.groupid === groupId))
+  );
+  if (!match) return null;
+
+  const druleCond = (match.filter && match.filter.conditions || []).find(c => c.conditiontype === '18');
+  return (druleCond && druleCond.value) || null;
+}
+
+/* 顧客のディスカバリルール配下で「現在応答しているポート」をIPごとに集計する（初期健全性
+   チェックの開放ポート棚卸し）。dservice.status: 0=Up（現在応答あり）のみを対象とし、
+   ログイン試行等は一切行わない（ディスカバリが既に収集済みのデータを読むだけ）。 */
+async function _fetchOpenPortsByIp(druleid) {
+  const byIp = {};
+  if (!druleid) return byIp;
+  const dhosts = await zbxCall('dhost.get', {
+    druleids: [druleid],
+    output: ['dhostid'],
+    selectDServices: ['ip', 'port', 'status']
+  }, 44);
+  dhosts.forEach(dh => (dh.dservices || []).forEach(ds => {
+    if (ds.status !== '0') return;
+    (byIp[ds.ip] = byIp[ds.ip] || []).push(ds.port);
+  }));
+  return byIp;
+}
+
 async function _loadNewDeviceHistory(groupId) {
   const tbody = document.getElementById('slide-newdevice-tbody');
   tbody.innerHTML = '<tr><td colspan="2" style="text-align:center;color:#78909c;padding:30px;">読み込み中...</td></tr>';
 
   try {
-    /* 顧客のディスカバリルールIDを、SNMP機器登録アクションの条件(ディスカバリルール)から特定する */
-    const actions = await zbxCall('action.get', {
-      output: ['actionid', 'name'],
-      search: { name: 'MSP_SNMP機器登録_' },
-      selectFilter: 'extend',
-      selectOperations: 'extend',
-      filter: { eventsource: 1 }
-    }, 40);
-
-    const match = actions.find(a =>
-      (a.operations || []).some(op => (op.opgroup || []).some(g => g.groupid === groupId))
-    );
-
-    if (!match) {
+    const druleid = await _resolveDruleId(groupId);
+    if (!druleid) {
       tbody.innerHTML = '<tr><td colspan="2" style="text-align:center;color:#78909c;padding:30px;">このホストグループに対応するディスカバリ設定がありません</td></tr>';
       const kpiUnknown0 = document.getElementById('kpi-unknown');
       if (kpiUnknown0) kpiUnknown0.textContent = '0';
-      return;
-    }
-
-    const druleCond = (match.filter && match.filter.conditions || []).find(c => c.conditiontype === '18');
-    const druleid = druleCond && druleCond.value;
-    if (!druleid) {
-      tbody.innerHTML = '<tr><td colspan="2" style="text-align:center;color:#78909c;padding:30px;">ディスカバリルールを特定できませんでした</td></tr>';
-      const kpiUnknown1 = document.getElementById('kpi-unknown');
-      if (kpiUnknown1) kpiUnknown1.textContent = '0';
-      return;
+      return null;
     }
 
     /* そのルール配下の全dserviceid・ip・portの対応表を作る（SNMP/ICMP/TCP問わず全プロトコル） */
@@ -1195,7 +1237,7 @@ async function _loadNewDeviceHistory(groupId) {
       tbody.innerHTML = '<tr><td colspan="2" style="text-align:center;color:#78909c;padding:30px;">新規検出履歴なし ✔</td></tr>';
       const kpiUnknown2 = document.getElementById('kpi-unknown');
       if (kpiUnknown2) kpiUnknown2.textContent = '0';
-      return;
+      return druleid;
     }
 
     /* value: 0=Up, 1=Down, 2=Discovered, 3=Lost。「新規検出」の趣旨に合わせDiscoveredのみ表示する */
@@ -1215,7 +1257,7 @@ async function _loadNewDeviceHistory(groupId) {
     tbody.innerHTML = '';
     if (discovered.length === 0) {
       tbody.innerHTML = '<tr><td colspan="2" style="text-align:center;color:#78909c;padding:30px;">新規検出履歴なし ✔</td></tr>';
-      return;
+      return druleid;
     }
     discovered.forEach(ev => {
       const tr = document.createElement('tr');
@@ -1226,16 +1268,18 @@ async function _loadNewDeviceHistory(groupId) {
       tr.innerHTML = `<td>${time}</td><td>${content}</td>`;
       tbody.appendChild(tr);
     });
+    return druleid;
   } catch (e) {
     console.error('_loadNewDeviceHistory:', e);
     tbody.innerHTML = '<tr><td colspan="2" style="text-align:center;color:#c62828;padding:30px;">取得エラー: ' + e.message + '</td></tr>';
+    return null;
   }
 }
 
 /* --------------------------------------------------
    デバイス監査描画
    -------------------------------------------------- */
-function _renderInventory(allH, items) {
+function _renderInventory(allH, items, openPortsByIp) {
   const tbody = document.getElementById('slide-inventory-tbody');
   tbody.innerHTML = '';
 
@@ -1244,6 +1288,7 @@ function _renderInventory(allH, items) {
 
   allH.forEach(h => {
     const hItems = items.filter(i => i.hostid === h.hostid);
+    const ip = h.interfaces && h.interfaces[0] ? h.interfaces[0].ip : '───';
     const secRisk     = secTag(h.tags, 'sec_risk');
     const secCveCount = secTag(h.tags, 'sec_cve_count');
     const secKevCount = secTag(h.tags, 'sec_kev_count');
@@ -1265,8 +1310,17 @@ function _renderInventory(allH, items) {
 
     /* 機器説明・バージョン */
     const dVal = dItem ? dItem.lastvalue : '';
-    const verM = dVal.match(/Ver(?:sion)?[\s.]?([0-9.]+)/i);
-    const ver  = verM ? `Ver ${verM[2] || verM[1]}` : '未特定';
+    /* FW — インベントリsoftware_full（Zabbixテンプレートのアイテムプリプロセッシング/
+       専用OIDによる確定値）優先、なければ従来のsysDescrライブ正規表現、それも無ければ未特定。
+       date_hw_expiry（下記EoL表示）と同じ「バッチ/テンプレート確定値優先」パターン。 */
+    const invFw = (h.inventory && h.inventory.software_full) ? h.inventory.software_full.trim() : '';
+    let ver;
+    if (invFw) {
+      ver = `Ver ${invFw}`;
+    } else {
+      const verM = dVal.match(/Ver(?:sion)?[\s.]?([0-9.]+)/i);
+      ver = verM ? `Ver ${verM[2] || verM[1]}` : '未特定';
+    }
     const dStr = dVal ? dVal.split(',')[0].trim().split(/\s+/).slice(0, 4).join(' ') : 'データ未取得';
 
     /* EoL — date_hw_expiry 優先、なければ sec_eol_date タグ */
@@ -1324,13 +1378,30 @@ function _renderInventory(allH, items) {
       }
     }
 
+    /* 開放ポート — ディスカバリが既に収集済みの応答ポートを表示するのみで、追加の通信・
+       ログイン試行は一切行わない（初期健全性チェック）。暗号化なし管理アクセス（Telnet/HTTP）
+       が開いている場合は警告色で強調する。 */
+    const openPorts = (openPortsByIp && openPortsByIp[ip]) || [];
+    const hasRiskyPort = openPorts.some(p => RISKY_OPEN_PORTS.has(p));
+    let portsHtml = '<span style="color:#90a4ae;font-size:10px;">情報なし</span>';
+    if (openPorts.length > 0) {
+      portsHtml = openPorts.map(p => {
+        const label = OPEN_PORT_SHORT_LABELS[p] || `TCP${p}`;
+        const risky = RISKY_OPEN_PORTS.has(p);
+        const style = risky
+          ? 'background:#ffebee;color:#c62828;font-weight:700;'
+          : 'background:#eceff1;color:#546e7a;';
+        return `<span class="badge" style="${style}font-size:9px;margin:1px;">${label}</span>`;
+      }).join(' ');
+    }
+
+    if (hasRiskyPort) badges.push('<span class="badge badge-warning" title="暗号化なしの管理アクセス（Telnet/HTTP）が開放されています">要見直し</span>');
     if (uDay >= 365) badges.push('<span class="badge badge-warning">要再起動</span>');
 
     const actionBadge = badges.length > 0
       ? badges.join('<br>')
       : '<span class="badge badge-success">対応不要</span>';
 
-    const ip = h.interfaces && h.interfaces[0] ? h.interfaces[0].ip : '───';
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td><strong>${h.name}</strong></td>
@@ -1340,12 +1411,13 @@ function _renderInventory(allH, items) {
       <td><strong style="color:#1565c0;">${uStr}</strong></td>
       <td>${vulnHtml}</td>
       <td><code style="font-size:10px;">${eolStr}</code></td>
+      <td>${portsHtml}</td>
       <td>${actionBadge}</td>`;
     tbody.appendChild(tr);
   });
 
   if (tbody.innerHTML === '') {
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:30px;color:#78909c;">資産データなし</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:30px;color:#78909c;">資産データなし</td></tr>';
   }
 }
 

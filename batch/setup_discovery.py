@@ -56,16 +56,70 @@ MIN_SOURCE_SNMP_DCHECKS = 2  # atLIB実運用ルールの実績値（sysName + s
 
 # 標準チェックリスト（type, ports, 用途）。SNMPチェックのkey_・snmp_communityは
 # SOURCE_RULE_NAMEから複製するため、ここではTCP/ICMPチェックのみ定義する。
+#
+# 23(Telnet)・80(HTTP)は「初期健全性チェック」（atlib_monthly_report.htmlのデバイス監査
+# セクション）が暗号化なし管理アクセスとして警告表示する対象のため追加している。単なる
+# 疎通チェックであり、認証情報の入力・ログイン試行は一切行わない。
 STANDARD_TCP_CHECKS = [
     (9100, "プリンター (RAW/JetDirect)"),
     (515,  "プリンター (LPR)"),
     (631,  "プリンター (IPP)"),
     (22,   "Linuxサーバー/SSH管理機器"),
+    (23,   "Telnet管理アクセス（暗号化なし、初期健全性チェック対象）"),
+    (80,   "HTTP管理画面（暗号化なし、初期健全性チェック対象）"),
     (445,  "Windowsサーバー (SMB)"),
     (3389, "Windowsサーバー (RDP)"),
     (3493, "UPS (NUT)"),
     (10050, "Zabbixエージェント導入済み機器"),
     (443,  "汎用Web管理機器フォールバック"),
+]
+
+# SNMP標準MIB-IIのOID（dcheckのkey_、Zabbix DBには先頭ドット無しで格納されている
+# ことを本番環境のdchecksテーブルで確認済み）。
+OID_SYSOBJECTID = "1.3.6.1.2.1.1.2.0"
+OID_SYSDESCR = "1.3.6.1.2.1.1.1.0"
+
+# ベンダー横断デバイス識別（FW未特定問題への対応）: sysObjectID/sysDescrの内容に応じて、
+# ベンダー専用テンプレート（FWバージョン等をZabbixのホストインベントリへ自動反映する
+# アイテムを持つ。実装はZabbix管理画面側、本スクリプトはリンクの自動化のみを担う）を
+# 追加リンクするDiscovery Actionを顧客ごとに作成する。
+#
+# 設計判断: ベンダーごとにPythonの正規表現パーサーを書く方式は、機種が増えるたびに
+# コードの保守対象が増え続けるためMSPの運用として非現実的、という判断で不採用とした。
+# 代わりにZabbixのテンプレート・アイテムプリプロセッシング・ホストインベントリ自動反映
+# （inventory_link）というノーコードの標準機能に寄せている。新しい機種に対応する際は、
+# Zabbix管理画面でテンプレートを1つ作成し、ここに1エントリ追加するだけでよい。
+#
+# match_check: "sysobjectid"（enterprise numberでベンダー確定できる機種向け）または
+#   "sysdescr"（sysObjectIDがNet-SNMP等の汎用OIDでベンダー識別に使えず、sysDescrの
+#   文字列でしか判定できない機種向け。例: Ubiquiti UniFiシリーズ）
+# match_value: Received value条件（LIKE演算子）でのマッチ対象文字列
+# template_name: Zabbix管理画面で事前に作成しておくテンプレート名。本スクリプト実行時に
+#   未作成の場合は警告を出してそのベンダーの自動リンクをスキップする（他のベンダーの
+#   処理には影響しない）
+VENDOR_TEMPLATE_RULES = [
+    {
+        "name": "NETGEAR",
+        "match_check": "sysobjectid",
+        "match_value": "1.3.6.1.4.1.4526",
+        "template_name": "MSP - NETGEAR Device Identification",
+    },
+    {
+        "name": "Brother",
+        "match_check": "sysobjectid",
+        "match_value": "1.3.6.1.4.1.2435",
+        "template_name": "MSP - Brother Device Identification",
+    },
+    {
+        "name": "Ubiquiti UniFi",
+        # sysObjectIDが".1.3.6.1.4.1.8072"（Net-SNMPそのものの汎用OID）を返す機種が
+        # あり、sysObjectIDだけではベンダー識別できないため、sysDescrの文字列
+        # （例: "Ubiquiti UniFi UCG-Ultra 5.1.19 Linux 5.4.213 ipq5322"）で判定する。
+        # atLIB実機（atl-router02）で2026-08-07に確認済み。
+        "match_check": "sysdescr",
+        "match_value": "Ubiquiti UniFi",
+        "template_name": "MSP - Ubiquiti UniFi Device Identification",
+    },
 ]
 
 
@@ -134,6 +188,12 @@ def main():
     for port, desc in STANDARD_TCP_CHECKS:
         print(f"  - TCP {port}（{desc}）")
 
+    print("\nベンダー横断デバイス識別（FW未特定問題対応）:")
+    for rule in VENDOR_TEMPLATE_RULES:
+        template = _find_template_by_name(zabbix, rule["template_name"])
+        status = f"templateid={template['templateid']}" if template else "[警告] テンプレート未作成のためスキップされます"
+        print(f"  - {rule['name']}（{rule['match_check']}で判定）: テンプレート「{rule['template_name']}」 {status}")
+
     if not args.apply:
         print("\n[dry-run] 書き込みは行っていません。内容を確認のうえ --apply で実行してください。")
         return
@@ -186,6 +246,12 @@ def main():
     else:
         _create_new_device_action(zabbix, new_device_action_name, druleid, notify_userids)
         print(f"  [作成] アクション「{new_device_action_name}」を作成しました（無効状態、社内送信先のみ: {len(notify_userids)}名）")
+
+    print("\nベンダー横断デバイス識別アクションを構成中...")
+    dchecks_for_rule = zabbix.call("drule.get", {
+        "druleids": [druleid], "output": ["druleid"], "selectDChecks": "extend",
+    })[0]["dchecks"]
+    _create_vendor_template_actions(zabbix, druleid, dchecks_for_rule, args.customer_code)
 
     print("\n完了。Zabbix管理画面でルール・アクションの内容を確認してください。")
     print("既知の機器に対して実際に正しく検出・分類されることを確認したのち、")
@@ -257,6 +323,15 @@ def _find_action_by_name(zabbix: ZabbixClient, name: str) -> dict | None:
 def _find_user(zabbix: ZabbixClient, username: str) -> dict | None:
     users = zabbix.call("user.get", {"output": ["userid", "username"], "filter": {"username": username}})
     return users[0] if users else None
+
+
+def _find_template_by_name(zabbix: ZabbixClient, name: str) -> dict | None:
+    templates = zabbix.call("template.get", {"output": ["templateid", "host"], "filter": {"host": name}})
+    return templates[0] if templates else None
+
+
+def _find_dcheck(dchecks: list[dict], oid: str) -> dict | None:
+    return next((dc for dc in dchecks if dc.get("key_") == oid), None)
 
 
 # ------------------------------------------------------------------
@@ -372,6 +447,102 @@ def _create_new_device_action(zabbix: ZabbixClient, name: str, druleid: str, use
             },
         ],
     })
+
+
+def _ensure_sysdescr_dcheck(zabbix: ZabbixClient, druleid: str, dchecks: list[dict]) -> dict:
+    """sysDescrのSNMPチェックがルールに無ければ追加する。
+
+    sysObjectIDだけではベンダー識別できない機種（Ubiquiti等、Net-SNMP汎用OIDを返す
+    ため）に対応するため、sysDescrの文字列内容でのReceived value判定が必要になる。
+    既存のsysObjectIDチェックのtype/snmp_community/portsをそのまま複製する（同一
+    ルール内でcommunity文字列が揃っている前提。テストルール由来の既存運用と同じ）。
+    冪等: 既に存在する場合は何もせず既存のdcheckをそのまま返す。
+    """
+    existing = _find_dcheck(dchecks, OID_SYSDESCR)
+    if existing:
+        return existing
+
+    sysobjectid_check = _find_dcheck(dchecks, OID_SYSOBJECTID)
+    if not sysobjectid_check:
+        raise RuntimeError(f"druleid={druleid}: sysObjectIDチェックが見つからないため、sysDescrチェックを複製作成できません")
+
+    new_check = {
+        "type": sysobjectid_check["type"],
+        "key_": OID_SYSDESCR,
+        "snmp_community": sysobjectid_check["snmp_community"],
+        "ports": sysobjectid_check["ports"],
+    }
+    # 既存チェック（dcheckid付き）はそのまま維持しつつ、新規チェック（dcheckid無し）を
+    # 追加する。drule.updateのdchecksは全件指定方式のため、既存分を欠かすと削除されてしまう。
+    kept = [{k: v for k, v in dc.items() if k != "druleid"} for dc in dchecks]
+    zabbix.call("drule.update", {"druleid": druleid, "dchecks": kept + [new_check]})
+
+    refreshed = zabbix.call("drule.get", {
+        "druleids": [druleid], "output": ["druleid"], "selectDChecks": "extend",
+    })
+    return _find_dcheck(refreshed[0]["dchecks"], OID_SYSDESCR)
+
+
+def _create_vendor_template_actions(zabbix: ZabbixClient, druleid: str, dchecks: list[dict],
+                                     customer_code: str) -> None:
+    """VENDOR_TEMPLATE_RULESの各エントリについて、sysObjectID/sysDescrの内容に応じて
+    ベンダー専用テンプレートを追加リンクするDiscovery Actionを作成する（FW未特定問題
+    への対応。詳細は同定数のコメントを参照）。
+
+    既存の_create_snmp_action()と同じ「ディスカバリルール・デバイスステータス=Up・
+    サービスタイプ=SNMPv2」の条件に、conditiontype=19(DCHECK)+12(DVALUE, Received
+    value)のペア条件を追加した専用アクションを、ベンダーごとに1つずつ作る。
+    デバイスステータス=Upは毎ポーリングサイクルで再評価されるため、新規オンボード
+    顧客だけでなく既存ホストも次回ポーリングサイクルで自動的にテンプレートがリンク
+    される（バックフィルスクリプト不要）。
+
+    conditiontype 12(DVALUE)/19(DCHECK)の数値、operator 2(LIKE=containsに相当)の
+    数値は、いずれもZabbix公式リポジトリのui/include/defines.inc.phpで裏取り済み
+    だが、本番でのDVALUE×DCHECKペア条件の実際の動作は未検証。初回は必ず1顧客・
+    1アクションで動作確認してから他アクションの有効化を進めること。
+    """
+    for rule in VENDOR_TEMPLATE_RULES:
+        action_name = f"MSP_ベンダー識別_{customer_code}_{rule['name']}"
+        if _find_action_by_name(zabbix, action_name):
+            print(f"  [スキップ] アクション「{action_name}」は既に存在します")
+            continue
+
+        template = _find_template_by_name(zabbix, rule["template_name"])
+        if not template:
+            print(f"  [警告] テンプレート「{rule['template_name']}」がまだ存在しないため、"
+                  f"「{rule['name']}」の自動識別アクションは作成しませんでした。"
+                  f"Zabbix管理画面でテンプレートを作成後、本スクリプトを再実行してください。")
+            continue
+
+        oid = OID_SYSOBJECTID if rule["match_check"] == "sysobjectid" else OID_SYSDESCR
+        dcheck = _find_dcheck(dchecks, oid)
+        if not dcheck and rule["match_check"] == "sysdescr":
+            dcheck = _ensure_sysdescr_dcheck(zabbix, druleid, dchecks)
+            print(f"    sysDescrチェックをルールに追加しました（dcheckid={dcheck['dcheckid']}）")
+        if not dcheck:
+            print(f"  [警告] 「{rule['name']}」の判定に必要なdcheck(OID={oid})が見つからないためスキップします")
+            continue
+
+        zabbix.call("action.create", {
+            "name": action_name,
+            "eventsource": 1,
+            "status": 0,
+            "filter": {
+                "evaltype": 0,  # AND（型が異なる条件は自動的にAND）
+                "conditions": [
+                    {"conditiontype": 18, "operator": 0, "value": druleid},            # ディスカバリルール
+                    {"conditiontype": 10, "operator": 0, "value": "0"},                # デバイスステータス=Up
+                    {"conditiontype": 8,  "operator": 0, "value": "11"},               # サービスタイプ=SNMPv2
+                    {"conditiontype": 19, "operator": 0, "value": dcheck["dcheckid"]}, # 対象dcheck
+                    {"conditiontype": 12, "operator": 2, "value": rule["match_value"]},# Received valueがcontains
+                ],
+            },
+            "operations": [
+                {"operationtype": 6, "optemplate": [{"templateid": template["templateid"]}]},
+            ],
+        })
+        print(f"  [作成] アクション「{action_name}」を作成しました"
+              f"（テンプレート「{rule['template_name']}」を条件付き自動リンク）")
 
 
 def _parse_args():
