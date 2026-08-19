@@ -340,7 +340,7 @@ body.export-mode .btn{display:none!important;}
             <th style="width:11%;">稼働時間</th>
             <th style="width:11%;">脆弱性</th>
             <th style="width:9%;">EoL</th>
-            <th style="width:14%;">開放ポート</th>
+            <th style="width:14%;">外部からのアクセス経路</th>
             <th style="width:10%;">対応要否</th>
           </tr>
         </thead>
@@ -348,6 +348,16 @@ body.export-mode .btn{display:none!important;}
           <tr><td colspan="9" style="text-align:center;color:#78909c;padding:30px;">「データ同期」ボタンを押してください</td></tr>
         </tbody>
       </table>
+    </div>
+    <div style="margin-top:6px;font-size:10px;color:#78909c;line-height:1.5;">
+      「外部からのアクセス経路」は、機器がネットワーク内から応答する管理・利用機能です。
+      <span style="background:#ffebee;color:#c62828;font-weight:700;border-radius:3px;padding:1px 5px;">赤色</span>
+      は暗号化されていない管理アクセスです。可能な場合はメーカーの案内に従い、暗号化された方式（HTTPS/SSH等）への切替をご検討ください。
+      （atLIBの監視のために使用している経路は表示対象から除外しています）
+    </div>
+    <div style="margin-top:14px;">
+      <label for="slide-inventory-remarks" style="display:block;font-weight:700;color:#37474f;font-size:12px;margin-bottom:4px;">📝 所感・コメント</label>
+      <textarea id="slide-inventory-remarks" rows="4" style="width:100%;box-sizing:border-box;font-size:11.5px;font-family:inherit;color:#37474f;border:1px solid #cfd8dc;border-radius:6px;padding:8px 10px;resize:vertical;line-height:1.6;" placeholder="データ同期を行うと、検出結果に応じた文言が自動で入力されます。必要に応じて書き換えてご利用ください。"></textarea>
     </div>
   </div>
   <div class="slide-footer">
@@ -1149,22 +1159,26 @@ const DISCOVERY_PORT_LABELS = {
   '443':  'TCP 443 (HTTPS)',
 };
 
-/* 開放ポート一覧（初期健全性チェック）用の短縮ラベル。テーブルセル内に複数バッジで
-   並べるため、DISCOVERY_PORT_LABELSより短い表記にする。 */
+/* 開放ポート一覧（初期健全性チェック）用の顧客向けラベル。プロトコル名の直訳ではなく、
+   非技術者にも用途とリスクが伝わる表現にする（9100/515/631は同じ「印刷機能」に集約し、
+   後段のデデュープでバッジの重複表示も防ぐ）。 */
 const OPEN_PORT_SHORT_LABELS = {
-  '161':  'SNMP',
-  '9100': 'RAW',
-  '515':  'LPR',
-  '631':  'IPP',
-  '22':   'SSH',
-  '23':   'Telnet',
-  '80':   'HTTP',
-  '445':  'SMB',
-  '3389': 'RDP',
-  '3493': 'UPS',
-  '10050':'Agent',
-  '443':  'HTTPS',
+  '9100': '印刷機能',
+  '515':  '印刷機能',
+  '631':  '印刷機能',
+  '22':   'リモート管理(暗号化)',
+  '23':   'リモート管理(未暗号化)',
+  '80':   'Web管理画面(未暗号化)',
+  '445':  'ファイル共有',
+  '3389': 'リモートデスクトップ',
+  '3493': 'UPS監視',
+  '443':  'Web管理画面(暗号化)',
 };
+/* atLIB自身が監視のために使っているアクセス経路（SNMP=161・Zabbixエージェント=10050・
+   ICMP=0）は、顧客が「開けた」ものではなく監視の仕組みそのものなので、顧客向けの
+   開放ポート表示からは除外する。表示すると「監視されている＝攻撃を受けている」と
+   誤解を招きかねないため。 */
+const CUSTOMER_HIDDEN_PORTS = new Set(['0', '161', '10050']);
 /* 暗号化なしの管理アクセスとして警告表示するポート */
 const RISKY_OPEN_PORTS = new Set(['23', '80']);
 
@@ -1192,17 +1206,21 @@ async function _resolveDruleId(groupId) {
    チェックの開放ポート棚卸し）。dservice.status: 0=Up（現在応答あり）のみを対象とし、
    ログイン試行等は一切行わない（ディスカバリが既に収集済みのデータを読むだけ）。 */
 async function _fetchOpenPortsByIp(druleid) {
-  const byIp = {};
-  if (!druleid) return byIp;
+  const byIpSet = {};
+  if (!druleid) return {};
   const dhosts = await zbxCall('dhost.get', {
     druleids: [druleid],
     output: ['dhostid'],
     selectDServices: ['ip', 'port', 'status']
   }, 44);
+  /* 同一ポートが複数のdcheck（例: sysName・sysObjectIDの2つのSNMPv2チェック、いずれも
+     port=161）から重複して記録されるため、IPごとにSetで集約して重複を除去する。 */
   dhosts.forEach(dh => (dh.dservices || []).forEach(ds => {
     if (ds.status !== '0') return;
-    (byIp[ds.ip] = byIp[ds.ip] || []).push(ds.port);
+    (byIpSet[ds.ip] = byIpSet[ds.ip] || new Set()).add(ds.port);
   }));
+  const byIp = {};
+  Object.keys(byIpSet).forEach(ip => { byIp[ip] = Array.from(byIpSet[ip]); });
   return byIp;
 }
 
@@ -1286,6 +1304,9 @@ function _renderInventory(allH, items, openPortsByIp) {
   /* sec_* タグ取得ヘルパー */
   const secTag = (tags, name) => { const t = (tags || []).find(t => t.tag === name); return t ? t.value : null; };
 
+  /* 所感・コメント欄の初期文言生成用に、顧客全体の検出状況を集計する */
+  const summary = { cveHostCount: 0, eolHostCount: 0, riskyPortHostCount: 0 };
+
   allH.forEach(h => {
     const hItems = items.filter(i => i.hostid === h.hostid);
     const ip = h.interfaces && h.interfaces[0] ? h.interfaces[0].ip : '───';
@@ -1328,6 +1349,15 @@ function _renderInventory(allH, items, openPortsByIp) {
     if (h.inventory && h.inventory.date_hw_expiry) eolStr = h.inventory.date_hw_expiry.trim();
     else if (secEolDate) eolStr = secEolDate;
 
+    /* 所感欄の集計用: 期限切れ or 1年以内に迫っている場合を「EoL要注意」として数える
+       （対応要否バッジの要交換／要計画と同じ判定基準） */
+    let hasEolIssue = false;
+    if (eolStr !== '情報なし') {
+      const eolCheckT = new Date(eolStr.replace(/-/g, '/')).getTime();
+      if (!isNaN(eolCheckT) && eolCheckT <= Date.now() + 31536000000) hasEolIssue = true;
+    }
+    if (hasEolIssue) summary.eolHostCount++;
+
     /* 脆弱性 — バッチ sec_* タグ優先、なければ Zabbix トリガー */
     let vulnHtml = '<span style="color:#2e7d32;font-weight:700;">検出なし</span>';
     let hasVuln  = false;
@@ -1353,6 +1383,7 @@ function _renderInventory(allH, items, openPortsByIp) {
         hasVuln = true;
       }
     }
+    if (hasVuln) summary.cveHostCount++;
 
     /* 対応要否バッジ — バッチの sec_risk タグ（CVE/EoL）と稼働時間超過は独立に評価し、
        両方該当する場合は両方のバッジを表示する（旧実装はsec_riskがあると稼働時間超過を
@@ -1380,22 +1411,28 @@ function _renderInventory(allH, items, openPortsByIp) {
 
     /* 開放ポート — ディスカバリが既に収集済みの応答ポートを表示するのみで、追加の通信・
        ログイン試行は一切行わない（初期健全性チェック）。暗号化なし管理アクセス（Telnet/HTTP）
-       が開いている場合は警告色で強調する。 */
-    const openPorts = (openPortsByIp && openPortsByIp[ip]) || [];
-    const hasRiskyPort = openPorts.some(p => RISKY_OPEN_PORTS.has(p));
-    let portsHtml = '<span style="color:#90a4ae;font-size:10px;">情報なし</span>';
-    if (openPorts.length > 0) {
-      portsHtml = openPorts.map(p => {
-        const label = OPEN_PORT_SHORT_LABELS[p] || `TCP${p}`;
-        const risky = RISKY_OPEN_PORTS.has(p);
-        const style = risky
-          ? 'background:#ffebee;color:#c62828;font-weight:700;'
-          : 'background:#eceff1;color:#546e7a;';
-        return `<span class="badge" style="${style}font-size:9px;margin:1px;">${label}</span>`;
-      }).join(' ');
-    }
+       が開いている場合は警告色で強調する。atLIB自身の監視経路（SNMP/Zabbixエージェント/
+       ICMP）は顧客向け表示から除外し、同じ日本語ラベルに集約されるポート（印刷機能等）は
+       ラベル単位で重複除去する。 */
+    const visiblePorts = (openPortsByIp && openPortsByIp[ip] || []).filter(p => !CUSTOMER_HIDDEN_PORTS.has(p));
+    const hasRiskyPort = visiblePorts.some(p => RISKY_OPEN_PORTS.has(p));
+    const labelSeen = new Set();
+    const portBadges = [];
+    visiblePorts.forEach(p => {
+      const label = OPEN_PORT_SHORT_LABELS[p] || `その他(${p}番)`;
+      if (labelSeen.has(label)) return;
+      labelSeen.add(label);
+      const risky = RISKY_OPEN_PORTS.has(p);
+      const style = risky
+        ? 'background:#ffebee;color:#c62828;font-weight:700;'
+        : 'background:#eceff1;color:#546e7a;';
+      portBadges.push(`<span class="badge" style="${style}font-size:9px;margin:1px;">${label}</span>`);
+    });
+    const portsHtml = portBadges.length > 0
+      ? portBadges.join(' ')
+      : '<span style="color:#90a4ae;font-size:10px;">情報なし</span>';
 
-    if (hasRiskyPort) badges.push('<span class="badge badge-warning" title="暗号化なしの管理アクセス（Telnet/HTTP）が開放されています">要見直し</span>');
+    if (hasRiskyPort) { badges.push('<span class="badge badge-warning">要見直し</span>'); summary.riskyPortHostCount++; }
     if (uDay >= 365) badges.push('<span class="badge badge-warning">要再起動</span>');
 
     const actionBadge = badges.length > 0
@@ -1419,6 +1456,29 @@ function _renderInventory(allH, items, openPortsByIp) {
   if (tbody.innerHTML === '') {
     tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:30px;color:#78909c;">資産データなし</td></tr>';
   }
+
+  _updateRemarksDraft(summary);
+}
+
+/* 所感・コメント欄に、検出結果に応じた初期文言を自動入力する。担当者が既に何か
+   書いている場合（空でない場合）は上書きしない。 */
+function _updateRemarksDraft(summary) {
+  const textarea = document.getElementById('slide-inventory-remarks');
+  if (!textarea || textarea.value.trim() !== '') return;
+
+  const hasIssue = summary.cveHostCount > 0 || summary.eolHostCount > 0 || summary.riskyPortHostCount > 0;
+
+  if (!hasIssue) {
+    textarea.value = '今回の初期健全性チェックでは、既知の脆弱性・サポート終了機器・暗号化されていない管理アクセスのいずれも検出されませんでした。現時点で緊急のご対応は必要ございません。今後も定期監視を継続してまいります。';
+    return;
+  }
+
+  const points = [];
+  if (summary.riskyPortHostCount > 0) points.push(`${summary.riskyPortHostCount}台の機器で暗号化されていない管理アクセスの開放`);
+  if (summary.cveHostCount > 0) points.push(`${summary.cveHostCount}台の機器で既知の脆弱性`);
+  if (summary.eolHostCount > 0) points.push(`${summary.eolHostCount}台の機器でサポート終了（EoL）`);
+
+  textarea.value = `今回の初期健全性チェックにおいて、${points.join('、')}が確認されました。詳細は上記デバイス監査表をご参照のうえ、対応要否欄に表示がある機器について、順次ご案内・ご相談させていただきます。`;
 }
 
 /* ==================================================
