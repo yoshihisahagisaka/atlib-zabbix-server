@@ -273,6 +273,9 @@ def _connect() -> ZabbixClient:
     token = os.environ.get("ZABBIX_TOKEN")
     user = os.environ.get("ZABBIX_USER")
     password = os.environ.get("ZABBIX_PASSWORD")
+    # Cloud Run Job（VPCコネクタ経由）からzabbix-serverの内部IPへ直接接続する場合のみ設定する
+    # （msp-frontend-server上での従来運用等、公開ホスト名で到達できる環境では未設定のままでよい）。
+    host_header = os.environ.get("ZABBIX_HOST_HEADER")
 
     if not url:
         print("[エラー] 環境変数 ZABBIX_URL が未設定です。")
@@ -281,7 +284,7 @@ def _connect() -> ZabbixClient:
         print("[エラー] 環境変数 ZABBIX_TOKEN、または ZABBIX_USER + ZABBIX_PASSWORD を設定してください。")
         sys.exit(1)
 
-    return ZabbixClient(url, user=user, password=password, token=token)
+    return ZabbixClient(url, user=user, password=password, token=token, host_header=host_header)
 
 
 # ------------------------------------------------------------------

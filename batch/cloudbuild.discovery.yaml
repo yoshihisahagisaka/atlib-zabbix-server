@@ -1,0 +1,11 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - build
+      - -t
+      - 'asia-northeast1-docker.pkg.dev/msp-zabbix/cloud-run-source-deploy/msp-discovery-setup-job'
+      - -f
+      - batch/Dockerfile.discovery
+      - batch
+images:
+  - 'asia-northeast1-docker.pkg.dev/msp-zabbix/cloud-run-source-deploy/msp-discovery-setup-job'

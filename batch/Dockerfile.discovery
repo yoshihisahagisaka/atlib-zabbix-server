@@ -1,0 +1,13 @@
+# Zabbixディスカバリルール・アクションのセットアップ（setup_discovery.py）をCloud Run Job化した
+# イメージ。ロジックはsetup_discovery.py・zabbix_client.pyそのまま(変更ゼロ)。
+# CMDはデフォルトで--dry-runにしておく（コンソールから引数無しで誤って手動実行しても
+# 書き込みが起きない安全策）。msp-customer-portal側からのJob起動時は
+# containerOverrides.argsで常に--apply ...に上書きされる。
+
+FROM python:3.12-slim
+WORKDIR /app
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+COPY setup_discovery.py zabbix_client.py ./
+ENTRYPOINT ["python3", "setup_discovery.py"]
+CMD ["--dry-run"]

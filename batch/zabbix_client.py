@@ -8,14 +8,28 @@ _TAG_PREFIX = "sec_"
 
 
 class ZabbixClient:
-    def __init__(self, url: str, user: str | None = None, password: str | None = None, token: str | None = None):
+    def __init__(
+        self,
+        url: str,
+        user: str | None = None,
+        password: str | None = None,
+        token: str | None = None,
+        host_header: str | None = None,
+    ):
         """user+password（従来の日次バッチ用）または token（APIトークン、失効・ローテーションが
         容易なため管理系スクリプトではこちらを推奨）のいずれかで認証する。
+
+        host_header: VPCコネクタ経由でzabbix-serverの内部IPへ直接接続する場合のみ指定する
+        （urlに内部IPを指定した上で、TLS証明書はFQDN向けのためホスト名検証は失敗する。
+        msp-customer-portal/src/services/zabbixClient.ts の同名の仕組みと同じ対応で、
+        SSL検証を無効化しHostヘッダーでFQDNを送る。公開ホスト名で到達できる環境
+        （msp-frontend-server上での従来運用等）では未指定のままでよい）。
         """
         self.url = url
         self.auth = None
         self._token = token
         self._id = 0
+        self._host_header = host_header
         if not token:
             self._login(user, password)
 
@@ -35,7 +49,12 @@ class ZabbixClient:
             headers["Authorization"] = f"Bearer {self._token}"
         elif self.auth:
             payload["auth"] = self.auth
-        r = requests.post(self.url, json=payload, headers=headers, timeout=30)
+        if self._host_header:
+            headers["Host"] = self._host_header
+        r = requests.post(
+            self.url, json=payload, headers=headers, timeout=30,
+            verify=not self._host_header,  # 内部IP直結時のみ自己署名証明書のためSSL検証を無効化
+        )
         r.raise_for_status()
         body = r.json()
         if "error" in body:
