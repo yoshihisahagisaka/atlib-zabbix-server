@@ -85,10 +85,21 @@ class ZabbixClient:
         # インベントリが空配列（インベントリ無効ホスト）を除外
         return [h for h in hosts if isinstance(h.get("inventory"), dict)]
 
-    def write_back_risk(self, hostid: str, risk_level: str, eol_info: dict | None, cves: list[dict]) -> None:
+    def write_back_risk(
+        self,
+        hostid: str,
+        risk_level: str,
+        cve_status: str,
+        hw_eol_info: dict,
+        sw_eol_info: dict,
+        cves: list[dict],
+    ) -> None:
         """セキュリティリスク情報をホストタグ・インベントリに書き戻す。
 
         管理タグ（sec_ プレフィックス）のみ更新し、既存の業務タグは保持する。
+        cve_status・hw_eol_info["status"]・sw_eol_info["status"]は
+        "confirmed"/"fuzzy_match"/"unknown"のいずれか（"unknown"は「未確認」であり
+        「問題なし」ではないことを、レポート側で区別するために書き戻す）。
         """
         # 既存タグを取得して業務タグを保持
         existing = self._req("host.get", {
@@ -105,27 +116,40 @@ class ZabbixClient:
         new_tags = [
             {"tag": f"{_TAG_PREFIX}risk",          "value": risk_level},
             {"tag": f"{_TAG_PREFIX}cve_count",     "value": str(len(cves))},
+            {"tag": f"{_TAG_PREFIX}cve_status",    "value": cve_status},
             {"tag": f"{_TAG_PREFIX}kev_count",     "value": str(exploited_count)},
             {"tag": f"{_TAG_PREFIX}checked_date",  "value": today},
+            {"tag": f"{_TAG_PREFIX}hw_eol_status", "value": hw_eol_info.get("status", "unknown")},
+            {"tag": f"{_TAG_PREFIX}sw_eol_status", "value": sw_eol_info.get("status", "unknown")},
         ]
-        if eol_info and eol_info.get("eol_date"):
-            new_tags.append({"tag": f"{_TAG_PREFIX}eol_date", "value": eol_info["eol_date"]})
-        if eol_info and eol_info.get("is_eol"):
-            new_tags.append({"tag": f"{_TAG_PREFIX}is_eol", "value": "true"})
+        if hw_eol_info.get("eol_date"):
+            new_tags.append({"tag": f"{_TAG_PREFIX}hw_eol_date", "value": hw_eol_info["eol_date"]})
+        if hw_eol_info.get("is_eol"):
+            new_tags.append({"tag": f"{_TAG_PREFIX}hw_is_eol", "value": "true"})
+        if sw_eol_info.get("eol_date"):
+            new_tags.append({"tag": f"{_TAG_PREFIX}sw_eol_date", "value": sw_eol_info["eol_date"]})
+        if sw_eol_info.get("is_eol"):
+            new_tags.append({"tag": f"{_TAG_PREFIX}sw_is_eol", "value": "true"})
 
         # インベントリ notes にサマリーテキストを書き込む
-        eol_str = ""
-        if eol_info:
+        def _eol_summary(label: str, eol_info: dict) -> str:
+            if eol_info.get("status") == "unknown":
+                return ""
+            suffix = "(要確認)" if eol_info.get("status") == "fuzzy_match" else ""
             if eol_info.get("is_eol"):
-                eol_str = " | EoL: 済み"
-            elif eol_info.get("eol_date"):
-                eol_str = f" | EoS: {eol_info['eol_date']}"
+                return f" | {label}EoL: 済み{suffix}"
+            if eol_info.get("eol_date"):
+                return f" | {label}EoS: {eol_info['eol_date']}{suffix}"
+            return ""
+
+        eol_str = _eol_summary("HW", hw_eol_info) + _eol_summary("SW", sw_eol_info)
+        cve_note = f"CVE:{len(cves)}件" if cve_status == "ok" else "CVE:検索失敗"
         kev_str = f" (KEV:{exploited_count}件)" if exploited_count else ""
-        notes = f"[セキュリティ] リスク:{risk_level} | CVE:{len(cves)}件{kev_str}{eol_str} | 確認:{today}"
+        notes = f"[セキュリティ] リスク:{risk_level} | {cve_note}{kev_str}{eol_str} | 確認:{today}"
 
         inventory = {"notes": notes}
-        if eol_info and eol_info.get("eol_date"):
-            inventory["date_hw_expiry"] = eol_info["eol_date"]
+        if hw_eol_info.get("eol_date"):
+            inventory["date_hw_expiry"] = hw_eol_info["eol_date"]
 
         self._req("host.update", {
             "hostid": hostid,

@@ -1,30 +1,52 @@
 {
-  "_comment": "キー: 'Vendor Model'。eol: YYYY-MM-DD or true/false。source_url は一次情報 URL。",
+  "_comment": "キー: 'Vendor Model'。hw=本体の販売・サポート終了、sw=現在搭載中のファームウェア/OSのサポート状況。eol_date: YYYY-MM-DD or null。is_eol: true/false。sw.fixed_in_versionは既知脆弱性が修正されたバージョン(main.pyがhost.inventory.software_fullと比較する)。source_urlは一次情報URL。",
 
   "NETGEAR WAX625": {
-    "eol_date":    "2026-10-31",
-    "eol":         "2026-10-31",
-    "latest":      "12.5.0.14",
-    "last_sale":   "2023-11-01",
-    "source":      "manual",
-    "source_url":  "https://www.downloads.netgear.com/files/netgear/pdfs/EOL.pdf"
+    "hw": {
+      "eol_date":   "2026-10-31",
+      "is_eol":     false,
+      "latest":     "12.5.0.14",
+      "last_sale":  "2023-11-01",
+      "source_url": "https://www.downloads.netgear.com/files/netgear/pdfs/EOL.pdf"
+    },
+    "sw": {
+      "eol_date": null,
+      "is_eol":   false,
+      "note":     "ファームウェアの個別サポート終了日は未確認"
+    },
+    "source": "manual"
   },
 
   "Ubiquiti UCG-Ultra": {
-    "eol_date":   null,
-    "eol":        false,
-    "latest":     null,
-    "source":     "manual",
-    "source_url": "https://ui.com/download/releases/network-server",
-    "note":       "EoL 未発表（2026-06 時点）。要定期確認。"
+    "hw": {
+      "eol_date":   null,
+      "is_eol":     false,
+      "latest":     null,
+      "source_url": "https://ui.com/download/releases/network-server",
+      "note":       "本体EoL未発表（2026-06時点）。要定期確認。"
+    },
+    "sw": {
+      "eol_date": null,
+      "is_eol":   false,
+      "note":     "ファームウェアの個別サポート終了日は未確認"
+    },
+    "source": "manual"
   },
 
   "Brother MFC-L3780CDW": {
-    "eol_date":   null,
-    "eol":        false,
-    "latest":     "1.35",
-    "source":     "manual",
-    "source_url": "https://support.brother.com/",
-    "note":       "CVE 既知7件は FW 1.20 で修正済。現行 1.35 は対応済み。"
+    "hw": {
+      "eol_date":   null,
+      "is_eol":     false,
+      "source_url": "https://support.brother.com/",
+      "note":       "本体EoL未発表"
+    },
+    "sw": {
+      "eol_date":         null,
+      "is_eol":           false,
+      "latest":           "1.35",
+      "fixed_in_version": "1.20",
+      "note":             "既知CVE7件はFW 1.20で修正済。現行1.35は対応済み。"
+    },
+    "source": "manual"
   }
 }

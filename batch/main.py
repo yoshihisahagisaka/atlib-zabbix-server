@@ -10,6 +10,7 @@
 import argparse
 import json
 import os
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -18,7 +19,7 @@ import yaml
 
 from zabbix_client import ZabbixClient
 from cpe_mapper import CpeMapper
-from nvd_client import NvdClient
+from nvd_client import NvdClient, NvdLookupError
 from eol_client import EolClient
 
 HERE = Path(__file__).parent
@@ -67,6 +68,18 @@ def main():
         fw = inv.get("software_full", "").strip()
 
         if not vendor and not model:
+            # 以前はここでcontinueして結果から完全に除外していたが、それだと
+            # 「インベントリ未入力で判定できなかった」ホストが集計上どこにも
+            # 現れず見落とされる。risk_level="unknown"として結果に含める。
+            print(f"  [警告] インベントリ未入力のためスキップ: {host['host']}（unknown扱いで記録）")
+            results.append({
+                "host": host["host"], "name": host["name"],
+                "vendor": vendor, "model": model, "firmware": fw,
+                "cpe": None, "cve_source": None, "cve_status": "unknown",
+                "hw_eol": {"status": "unknown", "reason": "no_inventory", "is_eol": None, "eol_date": None, "days_until_eol": None},
+                "sw_eol": {"status": "unknown", "reason": "no_inventory", "is_eol": None, "eol_date": None, "days_until_eol": None},
+                "cves": [], "risk_level": "unknown",
+            })
             continue
 
         device_key = f"{vendor} {model}".strip()
@@ -74,15 +87,32 @@ def main():
 
         cpe = cpe_mapper.get_cpe(device_key)
 
-        if cpe:
-            cves = nvd.get_cves_by_cpe(cpe)
-            cve_source = "cpe"
-        else:
-            cves = nvd.get_cves_by_keyword(device_key)
-            cve_source = "keyword"
+        cve_status = "ok"
+        try:
+            if cpe:
+                cves = nvd.get_cves_by_cpe(cpe)
+                cve_source = "cpe"
+            else:
+                cves = nvd.get_cves_by_keyword(device_key)
+                cve_source = "keyword"
+        except NvdLookupError:
+            # 検索が失敗しただけであり「脆弱性0件」ではない。空リストと区別するため
+            # cve_statusを別立てし、_calc_riskが「不明」判定に使う。
+            cves = []
+            cve_source = None
+            cve_status = "lookup_failed"
 
-        eol_info = eol_client.get_eol(device_key, model)
-        risk = _calc_risk(cves, eol_info)
+        hw_eol_info = eol_client.get_hw_eol(device_key, model)
+        sw_eol_info = eol_client.get_sw_eol(device_key, fw)
+
+        # eol_overrides.jsonのsw.fixed_in_versionが分かっている場合、実機ファームウェアが
+        # それ以上かを判定して付記する（表示用の参考情報。risk_levelの自動判定には使わない。
+        # 手動overridesの既知CVE件数と、NVD検索結果のCVE件数が必ずしも一致しないため）。
+        fixed_in = sw_eol_info.get("fixed_in_version")
+        if fixed_in and fw:
+            sw_eol_info["patched"] = _version_at_least(fw, fixed_in)
+
+        risk = _calc_risk(cves, cve_status, hw_eol_info, sw_eol_info)
 
         results.append({
             "host": host["host"],
@@ -92,7 +122,9 @@ def main():
             "firmware": fw,
             "cpe": cpe,
             "cve_source": cve_source,
-            "eol": eol_info,
+            "cve_status": cve_status,
+            "hw_eol": hw_eol_info,
+            "sw_eol": sw_eol_info,
             "cves": cves,
             "risk_level": risk,
         })
@@ -118,7 +150,9 @@ def main():
             if not hostid:
                 continue
             try:
-                zabbix.write_back_risk(hostid, r["risk_level"], r["eol"], r["cves"])
+                zabbix.write_back_risk(
+                    hostid, r["risk_level"], r["cve_status"], r["hw_eol"], r["sw_eol"], r["cves"],
+                )
                 print(f"  書き戻し完了: {r['host']} → {r['risk_level']}")
             except Exception as e:
                 print(f"  [警告] 書き戻し失敗 ({r['host']}): {e}")
@@ -148,23 +182,65 @@ def main():
 # リスク判定
 # ------------------------------------------------------------------
 
-def _calc_risk(cves: list[dict], eol_info: dict | None) -> str:
-    if eol_info and eol_info.get("is_eol"):
+def _calc_risk(cves: list[dict], cve_status: str, hw_eol_info: dict, sw_eol_info: dict) -> str:
+    """risk_levelの出力空間: critical|high|medium|warning|unknown|ok
+
+    "unknown"は、CVE検索が失敗(cve_status!="ok")またはEoL判定がいずれも
+    "confirmed"/"fuzzy_match"に至らなかった(status=="unknown")場合に返す。
+    ただし確定的な問題(critical/high/medium/warning)が他方から出ていれば、
+    そちらを優先する（一部不明が確定済みの危険を覆い隠さないようにするため）。
+    "fuzzy_match"は「不明」ではなく「一定の根拠あり」として扱い、is_eol/
+    days_until_eolがあれば従来通りcritical/warning判定に使う（ただし
+    hw_eol_info/sw_eol_info自体のstatusは呼び出し側でそのまま保持され、
+    書き戻し・レポート側で「fuzzy_matchに基づく判定である」旨を表示できる）。
+    """
+    def _is_determined(eol_info: dict) -> bool:
+        return eol_info.get("status") in ("confirmed", "fuzzy_match")
+
+    if _is_determined(hw_eol_info) and hw_eol_info.get("is_eol"):
+        return "critical"
+    if _is_determined(sw_eol_info) and sw_eol_info.get("is_eol"):
         return "critical"
 
-    exploited = [c for c in cves if c.get("actively_exploited")]
-    critical_cves = [c for c in cves if (c.get("cvss_score") or 0) >= 9.0]
-    high_cves = [c for c in cves if 7.0 <= (c.get("cvss_score") or 0) < 9.0]
+    if cve_status == "ok":
+        exploited = [c for c in cves if c.get("actively_exploited")]
+        critical_cves = [c for c in cves if (c.get("cvss_score") or 0) >= 9.0]
+        high_cves = [c for c in cves if 7.0 <= (c.get("cvss_score") or 0) < 9.0]
 
-    if exploited or critical_cves:
-        return "critical"
-    if high_cves:
-        return "high"
-    if cves:
-        return "medium"
-    if eol_info and eol_info.get("days_until_eol") is not None and eol_info["days_until_eol"] <= 90:
-        return "warning"
+        if exploited or critical_cves:
+            return "critical"
+        if high_cves:
+            return "high"
+        if cves:
+            return "medium"
+
+    for eol_info in (hw_eol_info, sw_eol_info):
+        if _is_determined(eol_info) and eol_info.get("days_until_eol") is not None \
+                and eol_info["days_until_eol"] <= 90:
+            return "warning"
+
+    if cve_status != "ok" or not _is_determined(hw_eol_info) or not _is_determined(sw_eol_info):
+        return "unknown"
+
     return "ok"
+
+
+def _version_at_least(current: str, minimum: str) -> bool | None:
+    """バージョン文字列current がminimum以上かを判定する。単純な数値ドット区切り
+    比較で十分なユースケース（ファームウェアバージョン比較）のみ対応する。
+    複雑なセマンティックバージョニング（プレリリース識別子等）は非対応で、
+    比較できない場合はNoneを返す（「不明」として扱われる）。"""
+    def _parse(v: str) -> list[int] | None:
+        parts = re.findall(r"\d+", v)
+        if not parts:
+            return None
+        return [int(p) for p in parts]
+
+    cur = _parse(current)
+    minv = _parse(minimum)
+    if cur is None or minv is None:
+        return None
+    return cur >= minv
 
 
 # ------------------------------------------------------------------
@@ -215,6 +291,7 @@ def _print_summary(results: list[dict]):
         "high":     "🟠 HIGH    ",
         "medium":   "🟡 MEDIUM  ",
         "warning":  "⚠️  WARNING ",
+        "unknown":  "❓ UNKNOWN ",
         "ok":       "✅ OK      ",
     }
     counts: dict[str, int] = {}
@@ -227,18 +304,27 @@ def _print_summary(results: list[dict]):
         if counts.get(level):
             print(f"  {label}: {counts[level]} 件")
 
-    flagged = [r for r in results if r["risk_level"] in ("critical", "high")]
+    # "unknown"は確定的な危険ではないが、データが取れておらず要対応（原因調査）という
+    # 意味でcritical/highと合わせて一覧表示する（運用者が見落とさないようにするため）。
+    flagged = [r for r in results if r["risk_level"] in ("critical", "high", "unknown")]
     if flagged:
-        print("\n要対応デバイス:")
+        print("\n要対応/要確認デバイス:")
         for r in flagged:
-            eol_str = ""
-            if r["eol"] and r["eol"].get("eol_date"):
-                eol_str = f"  [EoS: {r['eol']['eol_date']}]"
+            eol_parts = []
+            for label, eol_info in (("HW-EoS", r.get("hw_eol")), ("SW-EoS", r.get("sw_eol"))):
+                if eol_info and eol_info.get("eol_date"):
+                    tag = "(要確認)" if eol_info.get("status") == "fuzzy_match" else ""
+                    eol_parts.append(f"{label}:{eol_info['eol_date']}{tag}")
+            eol_str = f"  [{', '.join(eol_parts)}]" if eol_parts else ""
             exploited = [c for c in r["cves"] if c.get("actively_exploited")]
             cve_str = f"  [{len(r['cves'])} CVE"
             if exploited:
                 cve_str += f"、うち {len(exploited)} 件は CISA KEV 掲載"
             cve_str += "]" if r["cves"] else ""
+            if r["cve_status"] == "lookup_failed":
+                cve_str += "  [CVE検索失敗]"
+            elif r["cve_status"] == "unknown":
+                cve_str += "  [CVE未検索]"
             print(f"  - {r['host']} ({r['vendor']} {r['model']} FW:{r['firmware']}){eol_str}{cve_str}")
 
 
@@ -263,6 +349,12 @@ def _dummy_hosts() -> list[dict]:
         {
             "hostid": "4", "host": "atLIB-ap02", "name": "atLIB-ap02",
             "inventory": {"vendor": "NETGEAR", "model": "WAX625", "software_full": "11.8.0.9"},
+        },
+        {
+            # インベントリ未入力ホスト。risk_level="unknown"として記録される
+            # （以前はcontinueで結果から完全に消えていたケース）ことの動作確認用。
+            "hostid": "5", "host": "atLIB-unknown01", "name": "atLIB-unknown01",
+            "inventory": {},
         },
     ]
 

@@ -15,12 +15,20 @@ _NVD_CVE_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 _KEV_URL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
 
 
+class NvdLookupError(Exception):
+    """NVD API呼び出し失敗（タイムアウト・レート制限・不正レスポンス等）。
+    「検索したがCVE 0件」と区別するための専用例外。呼び出し側(main.py)はこれを
+    捕捉してcve_status="lookup_failed"とし、risk_level="unknown"につなげる
+    （検索失敗を「脆弱性なし」と誤認しないため）。"""
+
+
 class NvdClient:
     def __init__(self, nvd_api_key: str = ""):
         self._api_key = nvd_api_key or ""
         self._headers = {"apiKey": self._api_key} if self._api_key else {}
         self._rate_delay = 0.6 if self._api_key else 6.0
         self._last_req = 0.0
+        self.kev_unavailable = False
         self._kev: set[str] = self._fetch_kev()
 
     # ------------------------------------------------------------------
@@ -45,7 +53,7 @@ class NvdClient:
             return [self._parse_item(v) for v in r.json().get("vulnerabilities", [])]
         except Exception as e:
             print(f"  [警告] NVD CVE 取得失敗 ({params}): {e}")
-            return []
+            raise NvdLookupError(str(e)) from e
 
     def _parse_item(self, item: dict) -> dict:
         cve = item["cve"]
@@ -81,12 +89,17 @@ class NvdClient:
         return None, None
 
     def _fetch_kev(self) -> set[str]:
+        # KEVは既存CVE結果への"actively_exploited"付与用のenrichmentであり、これ自体が
+        # CVEの主ソースではないため、失敗してもバッチ全体は止めない(空集合で継続)。
+        # ただしkev_unavailableフラグでmain.py側が「今回の実行はKEV照合なし」と
+        # 記録できるようにする(CVE自体が0件のケースと区別するため)。
         try:
             r = requests.get(_KEV_URL, timeout=15)
             r.raise_for_status()
             return {v["cveID"] for v in r.json().get("vulnerabilities", [])}
         except Exception as e:
             print(f"  [警告] CISA KEV 取得失敗: {e}")
+            self.kev_unavailable = True
             return set()
 
     def _rate_wait(self):

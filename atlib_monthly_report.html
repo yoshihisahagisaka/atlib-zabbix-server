@@ -1304,17 +1304,24 @@ function _renderInventory(allH, items, openPortsByIp) {
   /* sec_* タグ取得ヘルパー */
   const secTag = (tags, name) => { const t = (tags || []).find(t => t.tag === name); return t ? t.value : null; };
 
-  /* 所感・コメント欄の初期文言生成用に、顧客全体の検出状況を集計する */
-  const summary = { cveHostCount: 0, eolHostCount: 0, riskyPortHostCount: 0 };
+  /* 所感・コメント欄の初期文言生成用に、顧客全体の検出状況を集計する。
+     unknownHostCountは「未確認」（データが無い/取得失敗）の件数で、"安全"側の
+     集計（eolHostCount等）とは独立にカウントし、_updateRemarksDraftが
+     「異常なし」の断定文言を誤って自動生成しないようにするために使う。 */
+  const summary = { cveHostCount: 0, eolHostCount: 0, riskyPortHostCount: 0, unknownHostCount: 0 };
 
   allH.forEach(h => {
     const hItems = items.filter(i => i.hostid === h.hostid);
     const ip = h.interfaces && h.interfaces[0] ? h.interfaces[0].ip : '───';
-    const secRisk     = secTag(h.tags, 'sec_risk');
-    const secCveCount = secTag(h.tags, 'sec_cve_count');
-    const secKevCount = secTag(h.tags, 'sec_kev_count');
-    const secEolDate  = secTag(h.tags, 'sec_eol_date');
-    const secChecked  = secTag(h.tags, 'sec_checked_date');
+    const secRisk        = secTag(h.tags, 'sec_risk');
+    const secCveCount    = secTag(h.tags, 'sec_cve_count');
+    const secCveStatus   = secTag(h.tags, 'sec_cve_status');
+    const secKevCount    = secTag(h.tags, 'sec_kev_count');
+    const secHwEolDate   = secTag(h.tags, 'sec_hw_eol_date');
+    const secHwEolStatus = secTag(h.tags, 'sec_hw_eol_status');
+    const secSwEolDate   = secTag(h.tags, 'sec_sw_eol_date');
+    const secSwEolStatus = secTag(h.tags, 'sec_sw_eol_status');
+    const secChecked     = secTag(h.tags, 'sec_checked_date');
     const dItem  = hItems.find(i => i.key_.includes('system.descr'));
     let uItem    = hItems.find(i => i.key_.includes('uptime') && i.name.toLowerCase().includes('network'));
     if (!uItem)  uItem = hItems.find(i => i.key_.includes('uptime'));
@@ -1344,24 +1351,49 @@ function _renderInventory(allH, items, openPortsByIp) {
     }
     const dStr = dVal ? dVal.split(',')[0].trim().split(/\s+/).slice(0, 4).join(' ') : 'データ未取得';
 
-    /* EoL — date_hw_expiry 優先、なければ sec_eol_date タグ */
-    let eolStr = '情報なし';
-    if (h.inventory && h.inventory.date_hw_expiry) eolStr = h.inventory.date_hw_expiry.trim();
-    else if (secEolDate) eolStr = secEolDate;
+    /* EoL — 機器本体(H/W)とファームウェア(S/W)を分離して表示する。
+       H/Wは date_hw_expiry（インベントリ確定値）優先、なければ sec_hw_eol_date タグ。
+       status="unknown"（未確認・データなし）と、日付が実際に判明している場合を
+       明確に区別する（旧実装は両方とも同じ「情報なし」相当で、対応要否バッジ・
+       所感集計から一律に除外されており、"未確認"が"EoLではない"と誤読される
+       原因になっていた）。 */
+    function _renderEol(label, dateStr, status) {
+      if (status === 'unknown' || !dateStr) {
+        return { html: `<span style="color:#90a4ae;">${label}: 情報なし</span>`, known: false, dateStr: null };
+      }
+      const tag = status === 'fuzzy_match'
+        ? '<span style="color:#e65100;font-size:9px;"> (要確認)</span>' : '';
+      return { html: `<span>${label}: ${dateStr}${tag}</span>`, known: true, dateStr };
+    }
+    const hwDateStr = (h.inventory && h.inventory.date_hw_expiry)
+      ? h.inventory.date_hw_expiry.trim() : (secHwEolDate || null);
+    const hw = _renderEol('本体', hwDateStr, secHwEolStatus);
+    const sw = _renderEol('FW', secSwEolDate || null, secSwEolStatus);
+    const eolStr = `${hw.html}<br>${sw.html}`;
 
     /* 所感欄の集計用: 期限切れ or 1年以内に迫っている場合を「EoL要注意」として数える
-       （対応要否バッジの要交換／要計画と同じ判定基準） */
+       （対応要否バッジの要交換／要計画と同じ判定基準）。H/W・S/Wいずれかが該当すればカウント。 */
     let hasEolIssue = false;
-    if (eolStr !== '情報なし') {
-      const eolCheckT = new Date(eolStr.replace(/-/g, '/')).getTime();
-      if (!isNaN(eolCheckT) && eolCheckT <= Date.now() + 31536000000) hasEolIssue = true;
-    }
+    [hw, sw].forEach(e => {
+      if (e.known) {
+        const t = new Date(e.dateStr.replace(/-/g, '/')).getTime();
+        if (!isNaN(t) && t <= Date.now() + 31536000000) hasEolIssue = true;
+      }
+    });
     if (hasEolIssue) summary.eolHostCount++;
+    const eolUnknown = !hw.known && !sw.known
+      && (secHwEolStatus === 'unknown' || secHwEolStatus === null)
+      && (secSwEolStatus === 'unknown' || secSwEolStatus === null);
 
-    /* 脆弱性 — バッチ sec_* タグ優先、なければ Zabbix トリガー */
-    let vulnHtml = '<span style="color:#2e7d32;font-weight:700;">検出なし</span>';
+    /* 脆弱性 — バッチ sec_* タグ優先、なければ Zabbix トリガー。
+       sec_cve_status !== 'ok'（検索失敗）またはタグ自体が無い場合は、確認済みホストと
+       同じ緑「検出なし」ではなく、グレー「未確認」を表示する（旧実装の最重要バグ:
+       データが全く無いホストが確認済みクリーンなホストと見分けが付かなかった）。 */
+    let vulnHtml = '<span style="color:#78909c;font-weight:700;">未確認</span>';
     let hasVuln  = false;
-    if (secCveCount !== null) {
+    let vulnUnknown = true;
+    if (secCveCount !== null && secCveStatus === 'ok') {
+      vulnUnknown = false;
       const cnt = parseInt(secCveCount, 10);
       if (cnt > 0) {
         const kevStr = secKevCount && secKevCount !== '0'
@@ -1381,9 +1413,11 @@ function _renderInventory(allH, items, openPortsByIp) {
       if (vT.length > 0) {
         vulnHtml = vT.map(t => `<span style="color:#c62828;font-size:10px;">⚠️ ${t.description}</span>`).join('<br>');
         hasVuln = true;
+        vulnUnknown = false;
       }
     }
     if (hasVuln) summary.cveHostCount++;
+    if (vulnUnknown || eolUnknown) summary.unknownHostCount++;
 
     /* 対応要否バッジ — バッチの sec_risk タグ（CVE/EoL）と稼働時間超過は独立に評価し、
        両方該当する場合は両方のバッジを表示する（旧実装はsec_riskがあると稼働時間超過を
@@ -1396,17 +1430,20 @@ function _renderInventory(allH, items, openPortsByIp) {
         high:     '<span class="badge badge-warning">要確認</span>',
         medium:   '<span class="badge badge-info">要監視</span>',
         warning:  '<span class="badge badge-warning">要計画</span>',
+        unknown:  '<span class="badge badge-neutral">未確認</span>',
       };
       if (riskMap[secRisk]) badges.push(riskMap[secRisk]);
     } else {
       if (hasVuln) badges.push('<span class="badge badge-warning">要パッチ</span>');
-      if (eolStr !== '情報なし') {
-        const eT = new Date(eolStr.replace(/-/g, '/')).getTime();
-        if (!isNaN(eT)) {
-          if (eT < Date.now()) badges.push('<span class="badge badge-critical">要交換</span>');
-          else if (eT <= Date.now() + 31536000000) badges.push('<span class="badge badge-warning">要計画</span>');
+      [hw, sw].forEach(e => {
+        if (e.known) {
+          const eT = new Date(e.dateStr.replace(/-/g, '/')).getTime();
+          if (!isNaN(eT)) {
+            if (eT < Date.now()) badges.push('<span class="badge badge-critical">要交換</span>');
+            else if (eT <= Date.now() + 31536000000) badges.push('<span class="badge badge-warning">要計画</span>');
+          }
         }
-      }
+      });
     }
 
     /* 開放ポート — ディスカバリが既に収集済みの応答ポートを表示するのみで、追加の通信・
@@ -1447,7 +1484,7 @@ function _renderInventory(allH, items, openPortsByIp) {
       <td><span class="badge badge-neutral">${ver}</span></td>
       <td><strong style="color:#1565c0;">${uStr}</strong></td>
       <td>${vulnHtml}</td>
-      <td><code style="font-size:10px;">${eolStr}</code></td>
+      <td style="font-size:10px;">${eolStr}</td>
       <td>${portsHtml}</td>
       <td>${actionBadge}</td>`;
     tbody.appendChild(tr);
@@ -1467,16 +1504,29 @@ function _updateRemarksDraft(summary) {
   if (!textarea || textarea.value.trim() !== '') return;
 
   const hasIssue = summary.cveHostCount > 0 || summary.eolHostCount > 0 || summary.riskyPortHostCount > 0;
+  const points = [];
+  if (summary.riskyPortHostCount > 0) points.push(`${summary.riskyPortHostCount}台の機器で暗号化されていない管理アクセスの開放`);
+  if (summary.cveHostCount > 0) points.push(`${summary.cveHostCount}台の機器で既知の脆弱性`);
+  if (summary.eolHostCount > 0) points.push(`${summary.eolHostCount}台の機器でサポート終了（EoL）`);
+
+  // unknownHostCount > 0（データ未取得・取得失敗の機器がある）の場合は、
+  // 「異常なし」という断定文言を絶対に自動生成しない（データが無いことと安全であることを
+  // 混同する、このツールで最も重大なバグだったため）。テキストエリアは引き続き編集可能で、
+  // 担当者が別途確認した上で手動で「異常なし」と書くことは妨げない。
+  if (summary.unknownHostCount > 0) {
+    let text = `今回の初期健全性チェックでは、${summary.unknownHostCount}台の機器で脆弱性・サポート終了状況を確認できませんでした（バッチ未実行またはデータ取得失敗の可能性があります）。`;
+    if (hasIssue) {
+      text += `また、${points.join('、')}が確認されました。`;
+    }
+    text += '確認が取れていない機器について「異常なし」と断定せず、担当エンジニアにご確認のうえ本欄を編集してください。';
+    textarea.value = text;
+    return;
+  }
 
   if (!hasIssue) {
     textarea.value = '今回の初期健全性チェックでは、既知の脆弱性・サポート終了機器・暗号化されていない管理アクセスのいずれも検出されませんでした。現時点で緊急のご対応は必要ございません。今後も定期監視を継続してまいります。';
     return;
   }
-
-  const points = [];
-  if (summary.riskyPortHostCount > 0) points.push(`${summary.riskyPortHostCount}台の機器で暗号化されていない管理アクセスの開放`);
-  if (summary.cveHostCount > 0) points.push(`${summary.cveHostCount}台の機器で既知の脆弱性`);
-  if (summary.eolHostCount > 0) points.push(`${summary.eolHostCount}台の機器でサポート終了（EoL）`);
 
   textarea.value = `今回の初期健全性チェックにおいて、${points.join('、')}が確認されました。詳細は上記デバイス監査表をご参照のうえ、対応要否欄に表示がある機器について、順次ご案内・ご相談させていただきます。`;
 }
