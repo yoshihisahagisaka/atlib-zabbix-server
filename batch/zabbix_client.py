@@ -108,7 +108,13 @@ class ZabbixClient:
             "selectTags": "extend",
         })
         current_tags: list[dict] = existing[0].get("tags", []) if existing else []
-        preserved = [t for t in current_tags if not t["tag"].startswith(_TAG_PREFIX)]
+        # host.get(selectTags="extend")は"automatic"(テンプレート由来か手動かを示す読み取り専用
+        # フィールド)を含むが、host.updateへ送り返すtagsにはこれを含められない(Invalid parameter
+        # エラーになる)。tag/valueのみに絞って渡す。テンプレートリンクでタグが自動付与される
+        # ホストが増えるまで顕在化しなかった不具合(2026-08-26判明)。
+        preserved = [
+            {"tag": t["tag"], "value": t["value"]} for t in current_tags if not t["tag"].startswith(_TAG_PREFIX)
+        ]
 
         # 新しいセキュリティタグを構築
         today = date.today().isoformat()
