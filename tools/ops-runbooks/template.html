@@ -401,6 +401,7 @@ a.xref-missing::after { content: ""; }
 <script type="text/plain" id="src-base-image">__DOC_BASE_IMAGE__</script>
 <script type="text/plain" id="src-portal-deploy">__DOC_PORTAL_DEPLOY__</script>
 <script type="text/plain" id="src-guide-application-intake">__GUIDE_APPLICATION_INTAKE__</script>
+<script type="text/plain" id="src-vendor-templates">__DOC_VENDOR_TEMPLATES__</script>
 
 <script>
 (function () {
@@ -426,7 +427,8 @@ a.xref-missing::after { content: ""; }
     { slug: "backup-dr",   group: "spec", tag: "07", title: "バックアップ・DR方針" },
     { slug: "device-mgmt", group: "spec", tag: "08", title: "機器管理・故障履歴・問い合わせ管理" },
     { slug: "base-image",  group: "spec", tag: "09", title: "Sensor Edge ベースイメージ作成" },
-    { slug: "portal-deploy", group: "spec", tag: "10", title: "msp-customer-portal デプロイ" }
+    { slug: "portal-deploy", group: "spec", tag: "10", title: "msp-customer-portal デプロイ" },
+    { slug: "vendor-templates", group: "spec", tag: "11", title: "MSPベンダー識別テンプレート" }
   ];
   var FILENAME_TO_SLUG = {
     "運用手順書_顧客追加フロー.md": "sensor-edge",
@@ -447,7 +449,8 @@ a.xref-missing::after { content: ""; }
     "実施手順_機器管理システム.md": "guide-device-mgmt",
     "運用手順書_ベースイメージ作成.md": "base-image",
     "運用手順書_ポータルデプロイ.md": "portal-deploy",
-    "実施手順_顧客申込み受付.md": "guide-application-intake"
+    "実施手順_顧客申込み受付.md": "guide-application-intake",
+    "運用手順書_MSPベンダーテンプレート.md": "vendor-templates"
   };
 
   function esc(s) {

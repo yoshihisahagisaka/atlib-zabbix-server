@@ -2,6 +2,8 @@
 
 最終更新: 2026-08-26
 
+この3テンプレートが存在することで、顧客オンボーディング時（`msp-customer-portal/docs/運用手順書_顧客オンボーディング統合フロー.md`手順3）に`setup_discovery.py`の`_create_vendor_template_actions()`が、該当ベンダーの機器を自動検出した際にテンプレートを追加リンクするDiscovery Action（`MSP_ベンダー識別_{customer_code}_{ベンダー名}`）を作成するようになる（2026-08-26以前はテンプレート未作成のため常にスキップされていた）。契約終了時の後処理でもこのアクションの無効化・削除が必要になった旨、オンボーディング手順書側にも追記済み。
+
 ## これは何か
 
 `zabbixserver/batch/setup_discovery.py`の`VENDOR_TEMPLATE_RULES`は、顧客オンボーディング時に`sysObjectID`/`sysDescr`の内容でベンダーを自動判定し、対応するテンプレートを条件付きでリンクするDiscovery Actionを自動生成する仕組みを持つ（コード側コメント参照）。ただしテンプレート自体はZabbix管理画面（API）側で事前に作成しておく必要があり、2026-08-26時点で以下3つを作成・実機（atLIB社内4台）で検証済み。

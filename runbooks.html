@@ -382,7 +382,7 @@ a.xref-missing::after { content: ""; }
       <button class="theme-btn" id="themeToggle" type="button" aria-label="配色を切り替え">
         <span id="themeIcon">◐</span><span id="themeLabel">配色を切替</span>
       </button>
-      <p class="gen-note">上段「操作ガイド」は非技術者向けの実施手順、下段「運用仕様書」は詳細な技術背景です。文中の水色リンクをクリックすると該当箇所へ移動します。生成日: 2026-08-25</p>
+      <p class="gen-note">上段「操作ガイド」は非技術者向けの実施手順、下段「運用仕様書」は詳細な技術背景です。文中の水色リンクをクリックすると該当箇所へ移動します。生成日: 2026-08-26</p>
     </div>
   </nav>
   <main class="main" id="main"></main>
@@ -865,9 +865,10 @@ git config --global --add safe.directory /opt/atlib-msp-dev
    ```bash
    python3 setup_discovery.py --dry-run --customer-code <code> --company-name "<name>"
    ```
-5. **確認**: 3つのアクションが「作成済み」と表示されること
+5. **確認**: 標準アクション3件が「作成済み」と表示されること。加えて、顧客の機器にNETGEAR/Brother/Ubiquiti UniFiが含まれる場合、対応する「MSP_ベンダー識別_{code}_...」アクションも表示される（該当機器が無いベンダー分は表示されなくてよい）
 6. **操作**: 問題なければ、手順2の出力にあった`--apply`のコマンドをそのまま貼り付けて実行する（先頭を`python`から`python3`に書き換える）
 7. **注意**: この手順はCloud Run（本番アプリ本体）からは実行できない。必ず`msp-frontend-server`にSSHした状態で実行すること
+8. **確認（該当機器がある場合のみ・初回は必須）**: ディスカバリ完了後（数分〜十数分）、機器管理画面またはZabbix管理画面で、対象機器のインベントリ（ベンダー/機種/ソフトウェアバージョン）が自動入力されていることを確認する。うまく反映されない場合は担当エンジニアに相談する
 
 ---
 
@@ -924,7 +925,7 @@ Sensor Edge側（機器回収・認証情報の失効）は `Sensor Edge/実施�
 **まず無効化のみ行う（削除はしない）**。以下は好きな順でよい（依存関係なし）。
 
 1. **画面**: Zabbix管理画面で、以下をすべて**無効化**する（削除はまだしない）
-   - 該当顧客のディスカバリアクション3件（`MSP_SNMP機器登録_{code}`・`MSP_ICMPフォールバック登録_{code}`・`MSP_新規機器検知通知_{code}`）
+   - 該当顧客のディスカバリアクション3件（`MSP_SNMP機器登録_{code}`・`MSP_ICMPフォールバック登録_{code}`・`MSP_新規機器検知通知_{code}`）、および該当顧客にあれば「MSP_ベンダー識別_{code}_...」アクション
    - 該当顧客のディスカバリルール（`MSP_インフラ自動検知_{code}`）
    - 顧客専用アクション（`{code}_alert`）
    - 通知用Zabbixユーザー（`notify_{code}`）
@@ -933,7 +934,7 @@ Sensor Edge側（機器回収・認証情報の失効）は `Sensor Edge/実施�
 保持期間（目安1〜3ヶ月、契約内容による）が経過し、削除してよいと判断した場合のみ、以下の順序で削除する（**この順序は必須**。逆順にすると「ホストが残っているためホストグループを削除できない」というエラーになる）。
 
 2. **削除する場合（担当エンジニアと相談の上で実施）**: 上記と同じ5項目を、以下の順に削除する
-   1. ディスカバリアクション3件
+   1. ディスカバリアクション（標準3件＋該当すればベンダー識別アクション）
    2. ディスカバリルール
    3. 顧客専用アクション（`{code}_alert`）
    4. 通知用Zabbixユーザー（`notify_{code}`）
@@ -2075,8 +2076,11 @@ chmod 600 ~/zabbix_env.sh
 2. アクション`MSP_SNMP機器登録_{code}`（SNMP応答機器を`MSP/{company_name}`グループへ自動登録）
 3. アクション`MSP_ICMPフォールバック登録_{code}`（SNMP非対応機器のフォールバック登録）
 4. アクション`MSP_新規機器検知通知_{code}`（新規機器検出時の通知。**作成時は無効状態**。社内(atladmin)向けの動作確認が別途必要。顧客への通知は、顧客がポータルの通知設定ページで「未知機器の検出」トグルを有効化した場合のみ届く）
+5. アクション`MSP_ベンダー識別_{code}_{ベンダー名}`（**2026-08-26〜**。`VENDOR_TEMPLATE_RULES`にテンプレートが存在するベンダー分、最大3件: NETGEAR・Brother・Ubiquiti UniFi。sysObjectID/sysDescrの内容で該当ベンダーと判定された機器へ、ホストインベントリ自動反映用テンプレートを追加リンクする。テンプレート未作成のベンダーは警告表示のみでアクションは作成されない。テンプレート自体の詳細は`zabbixserver/運用手順書_MSPベンダーテンプレート.md`を参照）
 
-**完了条件**：Zabbix管理画面（Data collection > Discovery / Alerts > Actions > Discovery actions）で、`MSP_インフラ自動検知_{code}`ルールと上記3アクションが作成されていること。手動フォールバック実行時は`--dry-run`で先に3つのアクションが「作成済み」になる想定であることを確認してから`--apply`する。
+**完了条件**：Zabbix管理画面（Data collection > Discovery / Alerts > Actions > Discovery actions）で、`MSP_インフラ自動検知_{code}`ルールと上記アクション（標準3件＋ベンダー識別アクション最大3件）が作成されていること。手動フォールバック実行時は`--dry-run`で先にこれらのアクションが「作成済み」になる想定であることを確認してから`--apply`する。
+
+**注意（2026-08-26〜、次回オンボーディングでの初回確認事項）**：ベンダー識別アクション（上記5.）は、テンプレート自体は実機（atLIB社内4台）で検証済みだが、`action.create`のDVALUE×DCHECKペア条件（`setup_discovery.py`の`_create_vendor_template_actions`docstring参照）による自動リンクは**本番の新規顧客オンボーディングではまだ一度も動作確認していない**（テンプレートが存在しなかった2026-08-25以前は、このアクション自体が一度も作成されたことがなかったため）。次回オンボーディング時は、対象顧客に該当ベンダー（NETGEAR/Brother/Ubiquiti UniFi）の機器が含まれる場合、ディスカバリ完了後に該当ホストへテンプレートが実際にリンクされ、インベントリ（vendor/model/software_full）が自動反映されることを`host.get`（`selectInventory`）で確認すること。想定通り動かない場合は、アクションを無効化した上で担当エンジニアに相談する。
 
 ---
 
@@ -2122,13 +2126,13 @@ SQL文自体は「顧客追加ワークシート」の**「【契約終了】ポ
 
 ### 6-2. Zabbix側のホストグループ・ホストは即削除せず一定期間保持する
 
-対象オブジェクトは6種類ある：ホストグループ、ホスト（複数）、ディスカバリルール（`MSP_インフラ自動検知_{code}`）、ディスカバリアクション3件（`MSP_SNMP機器登録_{code}`・`MSP_ICMPフォールバック登録_{code}`・`MSP_新規機器検知通知_{code}`）、通知用Zabbixユーザー（`notify_{customer_code}`）、顧客専用アクション（`{customer_code}_alert`）。
+対象オブジェクトは6種類ある：ホストグループ、ホスト（複数）、ディスカバリルール（`MSP_インフラ自動検知_{code}`）、ディスカバリアクション（標準3件`MSP_SNMP機器登録_{code}`・`MSP_ICMPフォールバック登録_{code}`・`MSP_新規機器検知通知_{code}`、および該当ベンダーの機器があれば**ベンダー識別アクション`MSP_ベンダー識別_{code}_{ベンダー名}`最大3件**（2026-08-26〜、手順3参照）を含む）、通知用Zabbixユーザー（`notify_{customer_code}`）、顧客専用アクション（`{customer_code}_alert`）。
 
 **フェーズ1（契約終了直後・必須）: 無効化のみ、削除はしない**
 
 Zabbix APIの仕様上、この6種類の間に「削除の順序」を強制する依存関係はない（無効化はどの順でもよい）。
 
-1. ディスカバリアクション3件を**無効化**（`action.update`で`status=1`）
+1. ディスカバリアクション（標準3件＋ベンダー識別アクション該当分）を**無効化**（`action.update`で`status=1`）
 2. ディスカバリルールを**無効化**（`drule.update`で`status=1`）
 3. 顧客専用アクション（`{customer_code}_alert`）を**無効化**
 4. 通知用Zabbixユーザー（`notify_{customer_code}`）を**無効化**
@@ -2138,7 +2142,7 @@ Zabbix APIの仕様上、この6種類の間に「削除の順序」を強制す
 
 保持期間（目安1〜3ヶ月、契約内容に応じて調整）が経過し、問題なければ削除する。Zabbix API仕様上、明確に**強制される**依存関係は「ホストグループは、そのグループにのみ属するホストが残っていると削除できない」という1点のみ（`hostgroup.delete`のAPI仕様に明記）。それ以外（アクション・ディスカバリルール）の削除順は強制されないが、**参照が宙に浮いた不完全な設定を残さないため**、以下の順序を推奨する。
 
-1. ディスカバリアクション3件を削除（ホストグループ・ディスカバリルールを参照しているオブジェクトなので、参照先より先に消す）
+1. ディスカバリアクション（標準3件＋ベンダー識別アクション該当分）を削除（ホストグループ・ディスカバリルールを参照しているオブジェクトなので、参照先より先に消す）
 2. ディスカバリルールを削除
 3. 顧客専用アクション（`{customer_code}_alert`）を削除
 4. 通知用Zabbixユーザーを削除
@@ -2196,6 +2200,7 @@ Zabbix Proxyオブジェクト自体の削除・PSK失効は`Sensor Edge/運用�
 - 2026-07-24（同日追記）: 契約〜申込み〜オンボーディングの仕組み化第一段階として、手順0の「①申込みフォーム送信」を実装（`msp-customer-portal`に`/apply.html`公開フォーム＋`/admin/customer-applications.html`管理画面を追加。既存の「ISMS診断フォーム」と同じ構造：公開フォーム→`customer_applications`テーブルへINSERT→担当者へ通知メール→Basic認証の管理画面でステータス管理）。ヒアリング日程調整・ヒアリング実施自体は引き続き人間が行う（自動化対象外）。デプロイ時は新規マイグレーション`006_customer_applications.sql`の適用と、環境変数`CUSTOMER_APPLICATION_NOTIFY_EMAIL`の設定が必須（未設定だとポータル全体が起動時エラーで落ちる）。
 - 2026-08-24: gcloud依存の削減を目的に2点を実装。(1) 手順0の申込み直後、顧客本人へTimeRex予約リンク付きの自動返信メールを送るようにした（`mailer.sendCustomerApplicationConfirmation`、環境変数`BOOKING_URL`必須）。(2) 手順2・3を`gcloud compute ssh`不要の管理画面`/admin/onboard-customer.html`（`POST /api/admin/onboarding`）に統合。`create_customer.ts`の5ステップを`src/services/onboardingService.ts`に抽出しCLI・API両対応にした上で、`setup_discovery.py`をロジック無変更のままCloud Run Job「msp-discovery-setup」としてコンテナ化し（`zabbixserver/batch/Dockerfile.discovery`）、オンボーディングAPIから自動起動する構成にした。実装過程で、`msp-customer-portal`本体は既にVPCコネクタ`msp-portal-connector`経由でzabbix-serverの内部IP（`10.146.0.3`）に到達しておりCloud RunからZabbixに到達できないという従来の記述が誤りだったことが判明（同じ経路をJobにも適用し解消）。また、Jobの認証に当初`portal-zabbix-user`を使う想定だったが`template.get`権限が無く失敗したため、`zabbix-api-user`（管理者アカウント）に切り替えた（詳細・将来の改善候補は手順3を参照）。CLIスクリプト・手動SSH実行はいずれもフォールバックとして維持。
 - 2026-08-25: 管理画面（`/admin/*`）の認証をBasic認証（共有パスワード）からGoogle Workspace認証（OAuth2 + PKCE、atlib.jpドメイン全員ログイン可）に移行。手順2・3で使う`/admin/onboard-customer.html`・`/admin/customer-applications.html`も対象。管理者権限（設定ページ等）は個人メールまたはGoogleグループ（`admin_principals`テーブル、`/admin/settings.html`から編集可）で判定する方式に変更。詳細は`MSP監視サービス_全体仕様書.md`「認証・セッション設計」を参照。
+- 2026-08-26: MSP専用ベンダー識別テンプレート（NETGEAR/Brother/Ubiquiti UniFi、詳細は`zabbixserver/運用手順書_MSPベンダーテンプレート.md`）を新規作成したことに伴い、手順3の「これにより自動的に作成されるもの」「完了条件」、および手順6-2の契約終了時オブジェクト一覧・無効化/削除手順に、`setup_discovery.py`の`_create_vendor_template_actions`が作成するベンダー識別アクション（`MSP_ベンダー識別_{code}_{ベンダー名}`、最大3件）を追記。このアクション自体は本番の新規オンボーディングでは今回が初めて実際に作成される（それまではテンプレート未作成のため常にスキップされていた）ため、次回オンボーディング時の初回動作確認を手順3に明記した。
 </script>
 <script type="text/plain" id="src-deploy">
 最終更新: 2026-07-11
@@ -3490,6 +3495,88 @@ Webサイトの申込みフォーム（`/apply.html`）から届いた新規申�
 
 ページを再読み込みする。改善しない場合は担当エンジニアに連絡する。
 </script>
+<script type="text/plain" id="src-vendor-templates">
+最終更新: 2026-08-26
+
+この3テンプレートが存在することで、顧客オンボーディング時（`msp-customer-portal/docs/運用手順書_顧客オンボーディング統合フロー.md`手順3）に`setup_discovery.py`の`_create_vendor_template_actions()`が、該当ベンダーの機器を自動検出した際にテンプレートを追加リンクするDiscovery Action（`MSP_ベンダー識別_{customer_code}_{ベンダー名}`）を作成するようになる（2026-08-26以前はテンプレート未作成のため常にスキップされていた）。契約終了時の後処理でもこのアクションの無効化・削除が必要になった旨、オンボーディング手順書側にも追記済み。
+
+## これは何か
+
+`zabbixserver/batch/setup_discovery.py`の`VENDOR_TEMPLATE_RULES`は、顧客オンボーディング時に`sysObjectID`/`sysDescr`の内容でベンダーを自動判定し、対応するテンプレートを条件付きでリンクするDiscovery Actionを自動生成する仕組みを持つ（コード側コメント参照）。ただしテンプレート自体はZabbix管理画面（API）側で事前に作成しておく必要があり、2026-08-26時点で以下3つを作成・実機（atLIB社内4台）で検証済み。
+
+| テンプレート名 | templateid | ベンダー判定 | 検証状況 |
+|---|---|---|---|
+| `MSP - NETGEAR Device Identification` | 10807 | sysObjectID `1.3.6.1.4.1.4526` | vendorのみ自動反映確認済み。model/software_fullは未対応（下記「既知の課題」参照） |
+| `MSP - Brother Device Identification` | 10806 | sysObjectID `1.3.6.1.4.1.2435` | vendor/model/software_full全て自動反映確認済み |
+| `MSP - Ubiquiti UniFi Device Identification` | 10805 | sysDescr `Ubiquiti UniFi` | vendor/model/software_full全て自動反映確認済み |
+
+いずれも「Templates/Network devices」テンプレートグループ（groupid=9、既存の`Network Generic Device by SNMP`と同じ）に所属。
+
+## 設計パターン
+
+各テンプレートは、SNMP経由で取得した生の文字列（`sysDescr`や`hrDeviceDescr`等）を、Zabbixの**依存アイテム(dependent item)**＋**プリプロセッシング**（正規表現/JavaScript）で加工し、ホストインベントリの`vendor`（inventory_link=31）・`model`（29）・`software_full`（17）へ自動反映する。ベンダーはテンプレート自体が既にベンダー確定済みの文脈でリンクされるため、JavaScriptプリプロセッシング`return 'ベンダー名';`で固定文字列を出力する。
+
+**重要な制約（実装時に判明）**:
+- Zabbixの依存アイテムの`master_itemid`は**同一テンプレート内のアイテムでなければならない**（他テンプレートのアイテムをmasterに指定するとAPIエラーになる）。そのため各ベンダーテンプレートは、ベーステンプレート（`Network Generic Device by SNMP`）の既存アイテムを流用せず、**同じOIDを取得する独立したSNMPアイテム**（キー名を`msp.sysdescr.raw`等、ベーステンプレートと重複しないものにする）を自テンプレート内に持つ。これはホストへの複数テンプレートリンク時、同じキーのアイテムが2つの独立テンプレートに存在すると衝突する（`setup_discovery.py`はベンダーテンプレートをベーステンプレートの「兄弟」として直接リンクする設計のため）ことへの対応でもある。sysDescr等はほぼ不変な値のため、1時間間隔の再ポーリングによる実害はない。
+- 依存アイテムのmaster側アイテムを削除すると、それに依存する子アイテムも連動して削除される（カスケード削除）。既存アイテムのOID修正時は`item.update`ではなく削除→再作成の方が確実（`item.update`では次回ポーリング時刻がリセットされず、変更が反映されるまで最大で元のポーリング間隔分待つことになる）。
+- Zabbix APIの`item.inventory_link`数値ID: `vendor`=31、`model`=29、`software_full`=17（公式ドキュメント「Host inventory」テーブルで確認。`contact`=23・`location`=24・`name`=3は既存アイテムの実値と突き合わせ済み）。
+- プリプロセッシングのtype数値: 5=正規表現（params: `パターン\n出力テンプレート`、`\1`等でキャプチャグループ参照）、21=JavaScript（params: JSコード文字列）。
+
+## 各テンプレートのアイテム定義
+
+### MSP - Ubiquiti UniFi Device Identification
+実機`sysDescr`例: `"Ubiquiti UniFi UCG-Ultra 5.1.31 Linux 5.4.213 ipq5322"`
+
+| キー | 種別 | 内容 |
+|---|---|---|
+| `msp.sysdescr.raw` | SNMP GET | OID `get[1.3.6.1.2.1.1.1.0]` |
+| `msp.vendor` | 依存(master=上記) | JS: `return 'Ubiquiti';` → inventory_link=31 |
+| `msp.model` | 依存(master=上記) | 正規表現: `Ubiquiti UniFi (\S+) [\d.]+ Linux` → inventory_link=29 |
+| `msp.software_full` | 依存(master=上記) | 正規表現: `Ubiquiti UniFi \S+ ([\d.]+) Linux` → inventory_link=17 |
+
+### MSP - Brother Device Identification
+実機`sysDescr`例: `"Brother NC-9200w, Firmware Ver.1.35  ,MID 8CE-963FID 2"`（ネットワークカード自体の型番のみでプリンタ製品名を含まない）。実機`hrDeviceDescr`（標準Printer-MIB、OID `1.3.6.1.2.1.25.3.2.1.3.1`）例: `"Brother MFC-L3780CDW series"`（`eol_overrides.json`の"Brother MFC-L3780CDW"キーと一致する製品名）。**modelは`sysDescr`ではなく`hrDeviceDescr`から取得すること。**
+
+| キー | 種別 | 内容 |
+|---|---|---|
+| `msp.hrdevicedescr.raw` | SNMP GET | OID `get[1.3.6.1.2.1.25.3.2.1.3.1]` |
+| `msp.sysdescr.raw` | SNMP GET | OID `get[1.3.6.1.2.1.1.1.0]` |
+| `msp.vendor` | 依存(master=sysdescr.raw) | JS: `return 'Brother';` → inventory_link=31 |
+| `msp.model` | 依存(master=hrdevicedescr.raw) | 正規表現: `Brother (.+?)(?: series)?$` → inventory_link=29 |
+| `msp.software_full` | 依存(master=sysdescr.raw) | 正規表現: `Firmware Ver\.([\d.]+)` → inventory_link=17 |
+
+### MSP - NETGEAR Device Identification
+実機`sysDescr`例: `"Linux atLIB-ap01 4.4.60 #1 SMP PREEMPT Sat Mar 28 13:24:22 UTC 2026 armv7l"`（汎用Linuxカーネル情報のみで、ベンダー・機種情報を一切含まない）。
+
+| キー | 種別 | 内容 |
+|---|---|---|
+| `msp.sysdescr.raw` | SNMP GET | OID `get[1.3.6.1.2.1.1.1.0]`（vendor固定値の依存元トリガーとしてのみ使用） |
+| `msp.vendor` | 依存(master=上記) | JS: `return 'NETGEAR';` → inventory_link=31 |
+
+**既知の課題**: model/software_fullを自動取得するSNMP OIDが未特定。ENTITY-MIB（`entPhysicalModelName` OID `1.3.6.1.2.1.47.1.1.1.1.13.1`、`entPhysicalSoftwareRev` OID `1.3.6.1.2.1.47.1.1.1.1.10.1`）を試したが、実機（NETGEAR WAX625、`atLIB-ap01`/`ap02`）では両方とも`"No Such Object available on this agent at this OID"`エラーとなり非対応と判明、アイテムは削除済み。現状は`host.inventory.model`を手動入力するか（`eol_overrides.json`の"NETGEAR WAX625"キーと一致させる必要がある）、NETGEAR製品の別OID（プライベートMIB等）を別途調査する必要がある。次にNETGEAR製品を追加する際は、この課題を先に解決するか、vendor固定のみで運用し手動でmodelを補完する運用を継続すること。
+
+## 新しいベンダーへの対応手順（将来）
+
+1. 対象機器のZabbixホストで、実機の`system.descr[sysDescr.0]`・`system.objectid[sysObjectID.0]`の値を確認する（`item.get`）。ベンダー固有の標準MIB（Printer-MIB `hrDeviceDescr`、ENTITY-MIB `entPhysicalModelName`等）が使えないか確認する。
+2. `sysObjectID`のenterprise number（`.1.3.6.1.4.1.<番号>`部分）でベンダーが一意に確定できるか確認する（できない場合はUbiquitiと同様`sysDescr`の文字列一致で判定する）。
+3. 上記「設計パターン」に沿って新規テンプレート`MSP - <ベンダー名> Device Identification`をAPI（`template.create`→`item.create`）で作成する。作成用スクリプトの実例は本手順書のGit履歴（2026-08-26のコミット）に一時的に使ったコードを参照（リポジトリには恒久保存していない。`zabbix_client.py`の`call()`汎用ラッパーで同様に組める）。
+4. `setup_discovery.py`の`VENDOR_TEMPLATE_RULES`に1エントリ追加する。
+5. 実機（または新規顧客の実際の機器）へテンプレートをリンクし、`host.get`でインベントリが正しく反映されることを確認する。
+
+## 検証コマンド例
+
+```python
+# host.getでインベントリと該当アイテムの値を確認
+z._req("host.get", {
+    "hostids": "<hostid>",
+    "output": ["host"],
+    "selectInventory": ["vendor", "model", "software_full"],
+    "selectItems": ["key_", "lastvalue", "state", "error"],
+})
+```
+
+`setup_discovery.py`（`--dry-run`）を実行すると「ベンダー横断デバイス識別」セクションで各テンプレートの`templateid`が表示され、「テンプレート未作成」警告が出なくなっていることを確認できる。
+</script>
 
 <script>
 (function () {
@@ -3515,7 +3602,8 @@ Webサイトの申込みフォーム（`/apply.html`）から届いた新規申�
     { slug: "backup-dr",   group: "spec", tag: "07", title: "バックアップ・DR方針" },
     { slug: "device-mgmt", group: "spec", tag: "08", title: "機器管理・故障履歴・問い合わせ管理" },
     { slug: "base-image",  group: "spec", tag: "09", title: "Sensor Edge ベースイメージ作成" },
-    { slug: "portal-deploy", group: "spec", tag: "10", title: "msp-customer-portal デプロイ" }
+    { slug: "portal-deploy", group: "spec", tag: "10", title: "msp-customer-portal デプロイ" },
+    { slug: "vendor-templates", group: "spec", tag: "11", title: "MSPベンダー識別テンプレート" }
   ];
   var FILENAME_TO_SLUG = {
     "運用手順書_顧客追加フロー.md": "sensor-edge",
@@ -3536,7 +3624,8 @@ Webサイトの申込みフォーム（`/apply.html`）から届いた新規申�
     "実施手順_機器管理システム.md": "guide-device-mgmt",
     "運用手順書_ベースイメージ作成.md": "base-image",
     "運用手順書_ポータルデプロイ.md": "portal-deploy",
-    "実施手順_顧客申込み受付.md": "guide-application-intake"
+    "実施手順_顧客申込み受付.md": "guide-application-intake",
+    "運用手順書_MSPベンダーテンプレート.md": "vendor-templates"
   };
 
   function esc(s) {
