@@ -352,7 +352,126 @@ Do not lead with an arbitrary monthly request count for Managed. If operational 
 | Network design/change project | Separate | Separate | Separate |
 | Company-wide IT strategy/consulting | No | No | No — IT経営KAIZEN |
 
-## 10. LP / sales wording
+## 10. Monitoring, notification and staffed-response policy
+
+### A. Separate monitoring from human response
+
+InfraVision monitoring runs continuously where the customer's Sensor Edge / Zabbix monitoring path is available.
+
+Customer-facing wording must distinguish:
+- **24-hour automated monitoring/detection**
+- **customer-configurable automated notification**
+- **atLIB staffed investigation/response**
+
+Do not use wording that can reasonably be read as “24/365 staffed support” unless a separate contract explicitly provides it.
+
+### B. Automated notification
+
+The existing customer portal is the standard control surface for customer alert delivery.
+
+Customer can configure:
+- notification destination email addresses
+- severity threshold: 重大のみ / 警告以上 / すべて
+- notification period: 24時間 / 営業時間のみ（平日 9:00-18:00）
+- unknown-device notification where available
+- maintenance windows and notification/monitoring suppression
+
+Therefore automated notification is primarily **customer-policy-driven**, not hard-coded per service plan.
+
+### C. Staffed response by plan
+
+#### Monitor
+- no routine atLIB human triage obligation
+- customer receives/observes automated monitoring information according to configured notification settings
+- customer makes the operational decision or requests separately quoted support
+
+#### Operation
+- no general incident-triage obligation
+- predefined automated operations continue according to agreed design
+- customer-requested standard light work is handled within the Operation request allowance
+- incident investigation outside a predefined operation is not automatically included
+
+#### Managed
+- atLIB performs first-level incident triage for relevant InfraVision monitoring events
+- atLIB checks current monitoring/configuration/history facts, assesses likely scope/cause where possible, and determines/recommends the next action
+- actions within ordinary existing-network management may be performed within monthly scope
+- hardware/vendor maintenance, onsite work, redesign and project work remain separate
+
+### D. Standard staffed window — working baseline
+
+Unless a separate option/contract states otherwise:
+
+**atLIB staffed Managed response: business days 9:00-18:00 (Japan time).**
+
+This is the current service-design baseline and must be aligned with actual company operating days/holiday definitions before FINAL contract wording.
+
+Outside the staffed window:
+- automated monitoring continues
+- automated customer notification follows the customer's portal settings
+- no standard promise of immediate atLIB human investigation or phone escalation
+- unresolved events are reviewed in the next staffed window according to severity/operational priority
+
+This keeps the JPY 79,800 Managed plan economically distinct from a 24/365 NOC/maintenance contract.
+
+### E. Communication channels
+
+Working channel design:
+- **Portal**: monitoring status, customer self-service settings, topology/monitoring controls
+- **Email**: automated alert delivery
+- **Inquiry form**: standard Managed network consultation / support request
+- **Phone**: escalation channel for atLIB when a material ongoing incident requires direct customer coordination during staffed hours
+
+Do not position Slack as the default unlimited Managed consultation channel. If Slack is offered for specific customers, treat it as an optional communication interface rather than a broader service scope.
+
+### F. Response target versus restoration SLA
+
+InfraVision Managed should define an **initial review/response target**, not a guaranteed restoration time.
+
+Reason:
+- restoration may depend on customer access, ISP, carrier, hardware vendor, replacement stock, onsite work or third-party configuration
+- the JPY 79,800 standard Managed plan is not a hardware/vendor maintenance SLA
+
+Recommended commercial structure:
+- automated detection/notification: continuous according to system availability and customer settings
+- staffed first review: within the standard staffed window
+- response target: define after validating actual support capacity
+- restoration time: no standard guarantee
+- urgent/after-hours staffed response: future separate option if commercially required
+
+Do not publish a numerical first-response SLA until delivery staffing and escalation operations are validated.
+
+### G. Incident lifecycle for Managed
+
+1. InfraVision detects an event.
+2. Automated notification is sent according to customer settings.
+3. During the staffed window, atLIB reviews relevant Managed events.
+4. atLIB checks monitoring data and known network configuration/history.
+5. atLIB classifies the situation:
+   - informational / recovered
+   - customer action required
+   - atLIB in-scope remote operation
+   - third-party/vendor action required
+   - separate change/project work required
+6. atLIB records the relevant operational history.
+7. atLIB communicates the result/next action through the appropriate channel.
+
+### H. Sales wording
+
+Recommended:
+**「24時間の自動監視と、営業時間内の有人一次切り分け。」**
+
+Supporting wording:
+**「夜間・休日も監視と自動通知は継続。マネージドプランでは、営業時間内にatLIBが障害状況を確認し、対応方針をご案内します。」**
+
+Avoid:
+- 「24時間365日サポート」
+- 「いつでもすぐ対応」
+- 「障害を必ず復旧」
+- 「24時間有人監視」
+
+unless separately contracted and operationally staffed.
+
+## 11. LP / sales wording
 
 Recommended ladder:
 - モニター: 「見える・気づける・自分で管理できる」
@@ -365,13 +484,13 @@ Operation should emphasize automation rather than recurring manual labor.
 
 Managed should emphasize environmental understanding, environmental facts/history, triage and consultation rather than “unlimited work.”
 
-## 11. Remaining decisions before FINAL
+## 12. Remaining decisions before FINAL
 
 1. Managed fair-use wording / contract threshold after operational validation
 2. Exact definition of one Operation request: time/complexity/target-device limits
 3. Whether unused Operation requests expire or carry over
-4. Managed staffed support hours and response target
-5. Exact after-hours behavior: automated notification vs atLIB human escalation
-6. Phone/Slack/email/form channel policy
+4. Confirm company business-day/holiday definition for the working 9:00-18:00 staffed window
+5. Validate delivery capacity before setting any numerical first-response target
+6. Decide whether paid after-hours staffed response will be offered as a future option
 7. Exact 50+ device overage pricing and multi-site rules
 8. Contract/SLA wording for best-effort triage, vendor dependencies and separately quoted work
