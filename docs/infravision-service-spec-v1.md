@@ -167,16 +167,10 @@ Includes Operation plus:
 - incident/change/response history management
 - periodic network health/risk review
 
-### B. FACTACT integration
-FACTACT may be used as the operational Fact/Decision/Execution layer for:
-- device/network ledger
-- configuration facts
-- incident history
-- change history
-- response history
-- operational decisions/evidence
-
-FACTACT is shared infrastructure and does not redefine the InfraVision service boundary.
+### B. Network ledger / operational history
+- atLIB maintains the customer network ledger and relevant operational history as an internal service capability.
+- Managed service records may include device/network facts, configuration facts, incident history, change history, response history, and operational decisions/evidence.
+- The implementation platform is an internal atLIB concern and is not part of the customer-facing InfraVision product proposition.
 
 ### C. Incident triage / response support
 - first-level investigation when monitoring detects an issue
@@ -195,7 +189,7 @@ This is a higher responsibility level than Monitor/Operation automatic screening
 ### E. Network consultation desk
 Customer can submit NETWORK-related questions through the designated inquiry form.
 
-atLIB answers with reference to InfraVision monitoring data and FACTACT-held customer network facts/history where available.
+atLIB answers with reference to InfraVision monitoring data and atLIB-held customer network facts/history where available.
 
 Examples:
 - Wi-Fi/network performance concern
@@ -255,7 +249,7 @@ Monitor should be positioned as a self-service network-management foundation, no
 
 Operation should emphasize automation rather than recurring manual labor.
 
-Managed should emphasize environmental understanding, Fact/history, triage and consultation rather than “unlimited work.”
+Managed should emphasize environmental understanding, environmental facts/history, triage and consultation rather than “unlimited work.”
 
 ## 10. Remaining decisions before FINAL
 
