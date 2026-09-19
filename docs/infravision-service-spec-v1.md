@@ -471,7 +471,108 @@ Avoid:
 
 unless separately contracted and operationally staffed.
 
-## 11. LP / sales wording
+## 11. Customer-facing final comparison
+
+The customer-facing comparison should explain the **reason to upgrade**, not enumerate every backend function.
+
+| | モニタープラン | オペレーションプラン | マネージドプラン |
+|---|---|---|---|
+| Monthly | **JPY 9,980** | **JPY 29,800** | **JPY 79,800** |
+| Initial | **JPY 30,000** | **JPY 50,000** | **JPY 50,000+** |
+| Core value | **見える・気づける・自分で管理** | **日常運用まで任せる** | **NW管理そのものを任せる** |
+| Best fit | NWを放置したくない | 定型運用の手間を減らしたい | NW担当者がいない／管理まで任せたい |
+| 24h automated monitoring | Yes | Yes | Yes |
+| Automatic alert | Yes | Yes | Yes |
+| Customer notification settings | Yes | Yes | Yes |
+| Maintenance/suppression settings | Yes | Yes | Yes |
+| Topology / monthly report | Yes | Yes | Yes |
+| Automatic EoL/CVE screening | Yes | Yes | Yes |
+| Routine operation automation | — | Yes | Yes |
+| Light remote requests | — | Up to 2/month | Normal ongoing operation included |
+| Human incident triage | — | — | Business hours |
+| Human EoL/CVE confirmation | — | — | When operationally relevant |
+| Network ledger/history maintained by atLIB | — | — | Yes |
+| Network consultation desk | — | — | Yes |
+| Design/build/change projects | Separate | Separate | Separate |
+
+### Upgrade story
+
+#### Monitor -> Operation
+Customer trigger:
+**「見えるようにはなった。でも、毎回自分で作業するのが面倒。」**
+
+Value added:
+- predefined operations are automated
+- light standard operations can be delegated
+- customer operational workload is reduced
+
+Sales phrase:
+**「監視するだけでなく、決まった運用まで自動化・代行します。」**
+
+#### Operation -> Managed
+Customer trigger:
+**「作業だけでなく、障害時の調査や日々の判断も任せたい。」**
+
+Value added:
+- atLIB understands the customer's network state/history
+- atLIB performs first-level incident triage
+- atLIB performs relevant detailed EoL/vulnerability confirmation
+- customer can consult about network issues
+- ordinary ongoing network management is handled without reducing the service to a simple request-count model
+
+Sales phrase:
+**「作業を任せるだけでなく、ネットワークを把握しているatLIBが、日々の管理・相談・一次切り分けまで担います。」**
+
+### Do not sell by feature-count alone
+
+The plans should not appear as:
+- cheap = few features
+- expensive = more buttons/features
+
+The responsibility level changes:
+1. Monitor: **customer decides and operates**
+2. Operation: **customer decides; atLIB/automation executes predefined operations**
+3. Managed: **atLIB also supports operational assessment, triage and ongoing management**
+
+This responsibility ladder is the primary commercial differentiator.
+
+### Recommended plan-card copy
+
+#### モニタープラン
+**ネットワークを、まず「見える状態」へ。**
+
+24時間の自動監視、異常通知、構成可視化、月次レポート。通知先や通知レベル、メンテナンス時の監視抑止もポータルから自分で設定できます。
+
+CTA/supporting phrase:
+**「NWは自社で管理する。でも、放置はしたくない企業へ。」**
+
+#### オペレーションプラン
+**監視だけでなく、日常運用の手間も減らす。**
+
+モニターの全機能に加え、定期再起動などの運用自動化と、VPNアカウント追加・削除やパスワード変更などの軽微なリモート作業を月2回まで依頼できます。
+
+CTA/supporting phrase:
+**「判断は自社で。決まった運用はatLIBへ。」**
+
+#### マネージドプラン
+**ネットワーク担当者がいなくても、管理されている状態へ。**
+
+atLIBがネットワークの構成・履歴を継続的に把握。24時間の自動監視に加え、営業時間内の障害一次切り分け、NW相談、EoL・脆弱性の詳細確認、日常的な運用まで支援します。
+
+CTA/supporting phrase:
+**「ネットワークの管理そのものをatLIBへ。」**
+
+### Scope note for customer materials
+
+Use a short note rather than filling the comparison table with exclusions:
+
+> ※ 各プランの月額範囲は既存ネットワークの監視・運用を対象とします。VLAN/IP/FW等の設計変更、機器増設・交換、新拠点構築、現地作業等は別途お見積りとなります。
+
+For Managed:
+
+> ※ マネージドプランの日常運用・NW相談は通常利用の範囲で月額に含まれます。大規模・高頻度な変更作業や設計・構築を伴う対応は別途お見積りとなります。
+
+## 12. LP / sales wording
 
 Recommended ladder:
 - モニター: 「見える・気づける・自分で管理できる」
@@ -484,7 +585,7 @@ Operation should emphasize automation rather than recurring manual labor.
 
 Managed should emphasize environmental understanding, environmental facts/history, triage and consultation rather than “unlimited work.”
 
-## 12. Remaining decisions before FINAL
+## 13. Remaining decisions before FINAL
 
 1. Managed fair-use wording / contract threshold after operational validation
 2. Exact definition of one Operation request: time/complexity/target-device limits
