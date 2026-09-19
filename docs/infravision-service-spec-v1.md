@@ -215,7 +215,121 @@ Even under Managed, the following are not automatically unlimited monthly-fee wo
 - onsite work
 - vendor/hardware maintenance obligations not separately contracted
 
-## 8. Plan comparison — current working version
+## 8. Monthly-scope boundary
+
+The commercial boundary is based on **maintaining the existing network** versus **changing/building the network**, not simply on the number of clicks or commands.
+
+### A. Monitor
+
+Customer performs operational actions themselves through the portal where supported.
+
+Included service-side work:
+- automated monitoring/detection
+- automated reporting
+- automated EoL/CVE screening
+- operation of the customer self-service platform
+
+Customer-requested remote operations are not included.
+
+### B. Operation
+
+In addition to predefined automated operations, customer-requested light remote work is included up to **2 requests/month**.
+
+Standard in-scope examples:
+- VPN account add/remove
+- Wi-Fi password change
+- network-device administrator/user password change
+
+The request must be executable under the existing agreed network design and procedure.
+
+The following principle determines whether a request remains a light operation:
+
+> **No design decision, topology change, policy redesign, or new equipment implementation is required.**
+
+If investigation or design is required before the requested change can safely be executed, it is not automatically an Operation-plan light request.
+
+### C. Managed
+
+Managed uses a fair-use operational model rather than advertising a fixed number of work requests.
+
+#### Included in the monthly fee — normal operation of the existing network
+- network-related consultation through the designated inquiry channel
+- checking current network configuration/inventory/history before answering
+- first-level incident triage
+- investigation of monitoring alerts and operational anomalies
+- response recommendation
+- EoL/vulnerability detailed confirmation when operationally relevant
+- maintenance of the network ledger and relevant operational history
+- VPN account add/remove
+- Wi-Fi/network-device password change
+- other low-risk remote operational work that does not change the agreed network design
+- necessary operational follow-up initiated by atLIB from InfraVision monitoring findings
+
+These activities should not be marketed as “unlimited work.” They are included when reasonably required for ordinary ongoing management of the contracted network.
+
+#### Separately quoted — change/build/project work
+Examples:
+- new VLAN or segmentation design/change
+- IP addressing or DHCP redesign/change
+- routing design/change
+- firewall policy design/change
+- new AP/switch/router/firewall installation
+- device replacement/migration
+- new site/network construction
+- major wireless redesign/site survey
+- large-scale firmware migration requiring project planning
+- cabling/physical construction
+- onsite work
+- work requiring coordination with third-party vendors beyond normal first-line liaison
+- any company-wide IT work outside the network boundary
+
+### D. Decision rule for ambiguous requests
+
+Use these questions in order:
+
+1. Is the request within the contracted network scope?
+   - No -> outside InfraVision / separate service.
+2. Is it necessary to maintain or restore the existing agreed network state?
+   - Yes -> Managed monthly scope in principle.
+3. Can it be executed safely under an existing procedure without a new design decision?
+   - Yes -> light operation; Operation request slot or Managed monthly scope.
+4. Does it alter architecture, security policy, segmentation, addressing, capacity, equipment or physical layout?
+   - Yes -> separate quotation/change project.
+5. Is the work unusually high-volume, repetitive due to customer-side process, or materially beyond ordinary management effort?
+   - Yes -> fair-use review and possible separate quotation.
+
+### E. Fair-use policy for Managed
+
+Customer-facing sales material should say:
+**「日常的なネットワーク運用・相談は月額内」**
+
+Contract/terms should reserve the right to scope and quote separately when:
+- request volume materially exceeds normal ongoing network management
+- a single request requires substantial investigation/engineering time
+- bulk account/device changes are requested
+- repeated work results from a customer-controlled recurring process that should be redesigned/automated
+- third-party/vendor work or onsite attendance is required
+
+Do not lead with an arbitrary monthly request count for Managed. If operational data later shows the need for quantitative thresholds, define them from actual delivery workload.
+
+### F. Examples
+
+| Customer request / event | Monitor | Operation | Managed |
+|---|---|---|---|
+| Change notification email/severity/time | Customer self-service | Customer self-service | Customer self-service |
+| Planned maintenance suppression | Customer self-service | Customer self-service | Customer self-service / atLIB support as needed |
+| VPN account add/remove | Not included | Light-work slot | Monthly scope |
+| Wi-Fi/NW password change | Not included | Light-work slot | Monthly scope |
+| “Wi-Fi seems slow; can you check?” | Not included | Separate investigation | Monthly consultation/triage |
+| Monitoring alert investigation | Automated alert only | Automated alert; human investigation not standard | atLIB first-level triage |
+| EoL/CVE ambiguous result detailed check | Not standard | Not standard | Monthly scope when relevant |
+| Add a VLAN | Separate | Separate | Separate change work |
+| Redesign IP/DHCP | Separate | Separate | Separate change work |
+| Add/replace an AP | Separate | Separate | Advice/need assessment may be monthly scope; implementation separately quoted |
+| Replace a switch/firewall | Separate | Separate | Advice/need assessment may be monthly scope; migration/replacement separately quoted |
+| Build a new office/site network | Separate project | Separate project | Separate project |
+
+## 9. Plan comparison — current working version
 
 | Capability | Monitor | Operation | Managed |
 |---|---|---|---|
@@ -238,7 +352,7 @@ Even under Managed, the following are not automatically unlimited monthly-fee wo
 | Network design/change project | Separate | Separate | Separate |
 | Company-wide IT strategy/consulting | No | No | No — IT経営KAIZEN |
 
-## 9. LP / sales wording
+## 10. LP / sales wording
 
 Recommended ladder:
 - モニター: 「見える・気づける・自分で管理できる」
@@ -251,9 +365,9 @@ Operation should emphasize automation rather than recurring manual labor.
 
 Managed should emphasize environmental understanding, environmental facts/history, triage and consultation rather than “unlimited work.”
 
-## 10. Remaining decisions before FINAL
+## 11. Remaining decisions before FINAL
 
-1. Managed light-request work limit (e.g. number/month or another fair-use model)
+1. Managed fair-use wording / contract threshold after operational validation
 2. Exact definition of one Operation request: time/complexity/target-device limits
 3. Whether unused Operation requests expire or carry over
 4. Managed staffed support hours and response target
