@@ -1,6 +1,8 @@
 # atLIB InfraVision — Partner Sales Material v1
 
-Status: WORKING CANONICAL  
+Status: WORKING CANONICAL
+
+Section 01 direction: APPROVED  
 Audience: 販売代理店 / 協業パートナー  
 Purpose: 代理店担当者がNWの専門家でなくても、対象顧客を見つけ、価値を説明し、案件化できる資料にする。
 
@@ -25,8 +27,9 @@ Do not require the partner salesperson to understand SNMP/Zabbix/network archite
 # 01. FV
 
 ## Main message
-**既存顧客へのIT提案を、  
-「売って終わり」から「毎月つながる」へ。**
+**納品して終わりにしない。  
+機器を売った、その先も。  
+お客様とつながり続けるビジネスへ。**
 
 ### Sub message
 ネットワーク機器を販売したあと、その環境を誰が見ていますか？
@@ -83,7 +86,7 @@ atLIB InfraVisionは、顧客ネットワークを継続的に見守り、
 **機器を売ったあとに、空白期間が生まれていませんか？**
 
 Typical current model:
-機器販売 / NW構築
+ルーター・UTM・スイッチ・Wi-Fi等の販売・構築
 → 納品
 → 数年間ほぼ接点なし
 → 障害 / 更改時に再接触
