@@ -274,6 +274,45 @@ Key message:
 
 ---
 
+## Future requirement: Partner portal / customer visibility
+
+Status: **FUTURE IMPLEMENTATION — not part of the current released capability**
+
+InfraVision should later provide a partner-facing view that allows an authorized sales partner to understand the status of customers under its responsibility.
+
+Business purpose:
+- end customers, especially companies without dedicated IT staff, may not routinely open the customer portal
+- the partner can complement that gap by reviewing customer status
+- the partner can identify changes and risks proactively instead of waiting for a customer inquiry
+- monitoring facts can become a trigger for customer follow-up, renewal, replacement and improvement proposals
+- InfraVision therefore becomes not only a monitoring service but also a mechanism for continuous existing-customer engagement
+
+Candidate partner view:
+- customer list / portfolio overview
+- normal / attention-needed status
+- important alerts and recent changes
+- EoL / replacement candidates
+- vulnerability / detailed-confirmation-needed items
+- newly detected devices / configuration changes where supported
+- monthly-report status
+- direct navigation to each authorized customer's detail view
+
+Target sales experience:
+**「今月、どのお客様に連絡すべきかが分かる。」**
+
+Important governance requirements before implementation:
+- explicit customer agreement / authorization
+- partner-to-customer tenancy and scope mapping
+- least-privilege access
+- no cross-customer data leakage
+- role-based permissions
+- access/audit logging
+- revocation when partner relationship or customer authorization ends
+
+Do not advertise this as a currently implemented feature until development and validation are complete.
+
+---
+
 # 09. 既存商材 + InfraVision
 
 ## Heading
