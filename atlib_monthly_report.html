@@ -1315,6 +1315,9 @@ function _renderInventory(allH, items, openPortsByIp) {
     const ip = h.interfaces && h.interfaces[0] ? h.interfaces[0].ip : '───';
     const secRisk        = secTag(h.tags, 'sec_risk');
     const secCveCount    = secTag(h.tags, 'sec_cve_count');
+    const secCveConfirmed = secTag(h.tags, 'sec_cve_confirmed_count');
+    const secCvePotential = secTag(h.tags, 'sec_cve_potential_count');
+    const secCveNotAssessable = secTag(h.tags, 'sec_cve_not_assessable_count');
     const secCveStatus   = secTag(h.tags, 'sec_cve_status');
     const secKevCount    = secTag(h.tags, 'sec_kev_count');
     const secHwEolDate   = secTag(h.tags, 'sec_hw_eol_date');
@@ -1393,19 +1396,29 @@ function _renderInventory(allH, items, openPortsByIp) {
     let hasVuln  = false;
     let vulnUnknown = true;
     if (secCveCount !== null && secCveStatus === 'ok') {
-      vulnUnknown = false;
-      const cnt = parseInt(secCveCount, 10);
-      if (cnt > 0) {
-        const kevStr = secKevCount && secKevCount !== '0'
-          ? `<br><span style="color:#b71c1c;font-size:9px;">うち KEV掲載: ${secKevCount}件</span>` : '';
-        vulnHtml = `<span style="color:#c62828;font-size:10px;">⚠️ CVE ${cnt}件</span>${kevStr}`;
-        if (secChecked) vulnHtml += `<br><span style="color:#90a4ae;font-size:9px;">確認:${secChecked}</span>`;
+      const confirmed = parseInt(secCveConfirmed !== null ? secCveConfirmed : secCveCount, 10) || 0;
+      const potential = parseInt(secCvePotential || '0', 10) || 0;
+      const notAssessable = parseInt(secCveNotAssessable || '0', 10) || 0;
+      vulnUnknown = potential > 0 || notAssessable > 0;
+      const lines = [];
+      if (confirmed > 0) {
+        lines.push(`<span style="color:#c62828;font-size:10px;">⚠️ 影響確認 ${confirmed}件</span>`);
         hasVuln = true;
-      } else {
-        const checkedStr = secChecked
-          ? `<br><span style="color:#90a4ae;font-size:9px;">確認:${secChecked}</span>` : '';
-        vulnHtml = `<span style="color:#2e7d32;font-weight:700;">検出なし</span>${checkedStr}`;
       }
+      if (potential > 0) {
+        lines.push(`<span style="color:#e65100;font-size:9px;">影響可能性 ${potential}件（要確認）</span>`);
+      }
+      if (notAssessable > 0) {
+        lines.push(`<span style="color:#78909c;font-size:9px;">判定不能 ${notAssessable}件</span>`);
+      }
+      if (confirmed === 0 && potential === 0 && notAssessable === 0) {
+        lines.push('<span style="color:#2e7d32;font-weight:700;">影響確認なし</span>');
+      }
+      if (confirmed > 0 && secKevCount && secKevCount !== '0') {
+        lines.push(`<span style="color:#b71c1c;font-size:9px;">うち KEV掲載: ${secKevCount}件</span>`);
+      }
+      if (secChecked) lines.push(`<span style="color:#90a4ae;font-size:9px;">確認:${secChecked}</span>`);
+      vulnHtml = lines.join('<br>');
     } else if (h.triggers && h.triggers.length > 0) {
       const vT = h.triggers.filter(t => t.value === '1' && (
         t.description.toUpperCase().includes('CVE') || t.description.includes('脆弱性')
