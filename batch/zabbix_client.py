@@ -93,6 +93,7 @@ class ZabbixClient:
         hw_eol_info: dict,
         sw_eol_info: dict,
         cves: list[dict],
+        cve_counts: dict | None = None,
     ) -> None:
         """セキュリティリスク情報をホストタグ・インベントリに書き戻す。
 
@@ -118,10 +119,19 @@ class ZabbixClient:
 
         # 新しいセキュリティタグを構築
         today = date.today().isoformat()
-        exploited_count = sum(1 for c in cves if c.get("actively_exploited"))
+        cve_counts = cve_counts or {}
+        confirmed_count = int(cve_counts.get("confirmed_affected", len(cves)))
+        potential_count = int(cve_counts.get("potentially_affected", 0))
+        not_assessable_count = int(cve_counts.get("not_assessable", 0))
+        relevant_cves = [c for c in cves if c.get("applicability_status") == "confirmed_affected"] or cves
+        exploited_count = sum(1 for c in relevant_cves if c.get("actively_exploited"))
         new_tags = [
             {"tag": f"{_TAG_PREFIX}risk",          "value": risk_level},
-            {"tag": f"{_TAG_PREFIX}cve_count",     "value": str(len(cves))},
+            # Backward-compatible: existing report reads sec_cve_count. It now means confirmed affected only.
+            {"tag": f"{_TAG_PREFIX}cve_count",     "value": str(confirmed_count)},
+            {"tag": f"{_TAG_PREFIX}cve_confirmed_count", "value": str(confirmed_count)},
+            {"tag": f"{_TAG_PREFIX}cve_potential_count", "value": str(potential_count)},
+            {"tag": f"{_TAG_PREFIX}cve_not_assessable_count", "value": str(not_assessable_count)},
             {"tag": f"{_TAG_PREFIX}cve_status",    "value": cve_status},
             {"tag": f"{_TAG_PREFIX}kev_count",     "value": str(exploited_count)},
             {"tag": f"{_TAG_PREFIX}checked_date",  "value": today},
@@ -149,7 +159,7 @@ class ZabbixClient:
             return ""
 
         eol_str = _eol_summary("HW", hw_eol_info) + _eol_summary("SW", sw_eol_info)
-        cve_note = f"CVE:{len(cves)}件" if cve_status == "ok" else "CVE:検索失敗"
+        cve_note = (f"CVE影響確認:{confirmed_count}件 / 可能性:{potential_count}件 / 判定不能:{not_assessable_count}件"\n                    if cve_status == "ok" else "CVE:検索失敗")
         kev_str = f" (KEV:{exploited_count}件)" if exploited_count else ""
         notes = f"[セキュリティ] リスク:{risk_level} | {cve_note}{kev_str}{eol_str} | 確認:{today}"
 
