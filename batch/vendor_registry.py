@@ -13,6 +13,7 @@ VENDOR_TEMPLATE_RULES = [
         "match_check": "sysobjectid",
         "match_operator": "contains",
         "match_value": "1.3.6.1.4.1.1182",
+        "family_match": null,
         "template_type": "atlib_identification",
         "template_name": "MSP - YAMAHA Device Identification",
         "families": ["RTX", "SWX", "WLX"],
@@ -33,6 +34,7 @@ VENDOR_TEMPLATE_RULES = [
         "match_check": "sysobjectid",
         "match_operator": "contains",
         "match_value": "1.3.6.1.4.1.12356",
+        "family_match": {"source": "sysdescr", "operator": "contains", "values": ["FortiGate", "FortiOS"]},
         "template_type": "zabbix_official",
         "template_name": "FortiGate by SNMP",
         "families": ["FortiGate"],
@@ -49,6 +51,7 @@ VENDOR_TEMPLATE_RULES = [
         "match_check": "sysobjectid",
         "match_operator": "contains",
         "match_value": "1.3.6.1.4.1.4526",
+        "family_match": null,
         "template_type": "atlib_identification",
         "template_name": "MSP - NETGEAR Device Identification",
         "families": [],
@@ -69,6 +72,7 @@ VENDOR_TEMPLATE_RULES = [
         "match_check": "sysobjectid",
         "match_operator": "contains",
         "match_value": "1.3.6.1.4.1.2435",
+        "family_match": null,
         "template_type": "atlib_identification",
         "template_name": "MSP - Brother Device Identification",
         "families": [],
@@ -89,6 +93,7 @@ VENDOR_TEMPLATE_RULES = [
         "match_check": "sysdescr",
         "match_operator": "contains",
         "match_value": "Ubiquiti UniFi",
+        "family_match": {"source": "sysdescr", "operator": "contains", "values": ["Ubiquiti UniFi"]},
         "template_type": "atlib_identification",
         "template_name": "MSP - Ubiquiti UniFi Device Identification",
         "families": ["UniFi"],
@@ -127,6 +132,14 @@ def validate_registry(rules: list[dict] | None = None) -> None:
             raise ValueError(f"{rule['id']}: unsupported match_operator={rule['match_operator']}")
         if rule["template_type"] not in {"zabbix_official", "atlib_identification"}:
             raise ValueError(f"{rule['id']}: unsupported template_type={rule['template_type']}")
+        fm = rule.get("family_match")
+        if fm:
+            if fm.get("source") not in {"sysobjectid", "sysdescr"}:
+                raise ValueError(f"{rule['id']}: invalid family_match.source")
+            if fm.get("operator") != "contains":
+                raise ValueError(f"{rule['id']}: unsupported family_match.operator")
+            if not fm.get("values"):
+                raise ValueError(f"{rule['id']}: family_match.values is empty")
         for field in ("vendor", "model", "firmware"):
             if rule["expected_identity"].get(field) not in {"confirmed", "probable", "unknown"}:
                 raise ValueError(f"{rule['id']}: invalid expected_identity.{field}")
