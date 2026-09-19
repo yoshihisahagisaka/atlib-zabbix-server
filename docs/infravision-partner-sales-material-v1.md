@@ -1,8 +1,6 @@
 # atLIB InfraVision — Partner Sales Material v1
 
-Status: WORKING CANONICAL
-
-Section 01 direction: APPROVED  
+Status: APPROVED CONTENT CANONICAL — 01–13 narrative/direction approved; final artwork and release-gate verification remain  
 Audience: 販売代理店 / 協業パートナー  
 Purpose: 代理店担当者がNWの専門家でなくても、対象顧客を見つけ、価値を説明し、案件化できる資料にする。
 
@@ -231,27 +229,33 @@ Technical terms are supporting evidence, not the opening sales pitch.
 # 07. エンドユーザー価値
 
 ## Heading
-**お客様が買うのは「監視ツール」ではありません。**
+**見えないリスクを、「見える安心」に。**
+
+InfraVisionは、ネットワークの状態・機器の老朽化・リスクを継続的に見える化。
+トラブルへの備えと、計画的なIT運用を支える。
 
 ### Value 1
-**止まる前・困る前に気づける**
-24時間自動監視で、異常を放置しない。
+**異常やトラブルに早く気づける**
+24時間の自動監視で、異常の兆候を早期に把握しやすくする。
 
 ### Value 2
-**何がつながっているか分かる**
-構成や機器の状態を見える化。
+**ネットワークの全体像がひと目で分かる**
+構成や機器の状態を見える化し、調査や新規機器検討にも活用できる。
 
 ### Value 3
-**古い機器・リスクを放置しない**
-EoLや脆弱性の確認材料を継続的に提供。
+**古い機器・リスクを把握し、計画的な予算化ができる**
+EoLや脆弱性情報を継続的に確認。更改時期を事前に把握し、更新計画・予算化につなげる。
+
+Value phrase:
+**「突然の更改から、計画的なIT投資へ。」**
 
 ### Value 4
-**専門担当者がいなくても始められる**
-完璧な機器台帳を準備してから導入する必要はない。
+**専門のIT担当者がいなくても管理できる**
+分かりやすいポータルと月次レポートで状態を把握できる。
 
 ### Value 5
-**必要になれば、運用・管理まで任せられる**
-企業の状態に合わせて段階的にアップグレード。
+**必要に応じて運用・管理まで任せられる**
+企業の状態に合わせて段階的にアップグレードできる。
 
 Core phrase:
 **構築したままのネットワークを、管理されているネットワークへ。**
@@ -262,6 +266,11 @@ Core phrase:
 
 ## 1. ストック収益
 スポット販売だけでなく、月額サービスを既存顧客へ追加できる。
+
+Partner monthly revenue baseline (approximately 25%):
+- Monitor: **JPY 2,480 / customer / month**
+- Operation: **JPY 7,480 / customer / month**
+- Managed: **JPY 19,800 / customer / month**
 
 ## 2. 継続接点
 月次の状態把握により、更改・増設・改善のタイミングを捉えやすくなる。
@@ -274,20 +283,19 @@ Key message:
 
 ---
 
-## Future requirement: Partner portal / customer visibility
+## Partner portal / customer visibility
 
-Status: **FUTURE IMPLEMENTATION — not part of the current released capability**
+External-material position: **include as a standard partner value, provided implementation is completed before release.**
 
-InfraVision should later provide a partner-facing view that allows an authorized sales partner to understand the status of customers under its responsibility.
+Authorized sales partners can review the status of customers under their responsibility, complementing cases where end customers do not routinely open the portal.
 
-Business purpose:
-- end customers, especially companies without dedicated IT staff, may not routinely open the customer portal
-- the partner can complement that gap by reviewing customer status
-- the partner can identify changes and risks proactively instead of waiting for a customer inquiry
-- monitoring facts can become a trigger for customer follow-up, renewal, replacement and improvement proposals
-- InfraVision therefore becomes not only a monitoring service but also a mechanism for continuous existing-customer engagement
+Business value:
+- understand customer status without waiting for an inquiry
+- identify changes and risks proactively
+- use monitoring facts as triggers for follow-up, renewal, replacement and improvement proposals
+- turn InfraVision into a continuous existing-customer engagement mechanism
 
-Candidate partner view:
+Partner view target:
 - customer list / portfolio overview
 - normal / attention-needed status
 - important alerts and recent changes
@@ -300,16 +308,14 @@ Candidate partner view:
 Target sales experience:
 **「今月、どのお客様に連絡すべきかが分かる。」**
 
-Important governance requirements before implementation:
+Mandatory release gate:
+- implementation and validation complete before external material release
 - explicit customer agreement / authorization
 - partner-to-customer tenancy and scope mapping
-- least-privilege access
+- least-privilege / role-based permissions
 - no cross-customer data leakage
-- role-based permissions
 - access/audit logging
-- revocation when partner relationship or customer authorization ends
-
-Do not advertise this as a currently implemented feature until development and validation are complete.
+- revocation when authorization ends
 
 ---
 
@@ -362,7 +368,13 @@ Headline:
 # 11. 支援体制
 
 ## Heading
-**販売前も、導入後も、atLIBが支援します。**
+**パートナー様のビジネスを、atLIBが最後まで支えます。**
+
+Important representation rule:
+Support categories are **functions/roles**, not a claim that separate dedicated departments currently exist.
+Use:
+**「少数精鋭のatLIBスタッフが、提案・導入・運用・レポート・継続フォローまで一貫して対応。」**
+Do not imply a current organization made up of independent Sales Support / Technical / Operations / Report / Customer Success departments.
 
 Partner does not need to become the monitoring-engineering team.
 
@@ -383,18 +395,16 @@ Boundary:
 
 ---
 
-# 12. 開始フロー
+# 12. 販売までの流れ
 
 ## Heading
-**まずは既存顧客1社から始められます。**
+**難しい準備は不要。シンプルな5ステップで始められます。**
 
-1. 候補顧客を選ぶ
-2. 現状を簡単に確認
-3. 3プランから提案
-4. InfraVision導入 / 初期設定
-5. 監視開始
-6. 月次レポート / 継続接点
-7. 必要に応じて運用・管理へアップグレード
+1. パートナー登録
+2. 提案準備 — 資料・技術情報をatLIBが提供
+3. 販売・ご契約 — 必要に応じて提案同行・技術支援
+4. 導入・初期設定 — atLIBが監視環境をセットアップ
+5. 運用・継続フォロー — 監視・月次レポート・改善/更改フォロー
 
 Partner discovery questions:
 - NWを普段見ている担当者はいますか？
@@ -407,11 +417,20 @@ These questions are for discovery, not a technical assessment.
 
 ---
 
-# 13. 最終CTA
+# 13. まとめ / 最終CTA
 
 ## Heading
-**まずは、御社の既存顧客で  
-InfraVisionが提案できそうな企業を一緒に探しませんか？**
+**既存顧客への提案から、継続収益と新たなビジネスチャンスを。**
+
+Five-point close:
+1. 既存顧客にすぐ提案できる
+2. 月額の継続収益になる
+3. 販売後も顧客の状態が見える
+4. 次の提案機会が生まれる
+5. 技術・運用はatLIBが支える
+
+Primary CTA:
+**「まずは既存顧客1社から始めてみませんか？」**
 
 Sub:
 NWに詳しくなくても構いません。  
@@ -440,9 +459,10 @@ Secondary message:
 
 # Open items before external release
 
-- partner commercial model / margin / resale or referral structure
+- finalize contractual/accounting treatment of the approved approximately-25% partner revenue baseline (Monitor JPY 2,480 / Operation JPY 7,480 / Managed JPY 19,800 per customer/month)
 - exact partner support and escalation contact process
 - exact business-day definition for Managed staffed response
 - validation of 50+ device and additional-site pricing
 - legal/contract wording for fair use and upgrade eligibility
+- partner portal must be implemented and validated before this material is externally released
 - real-device E2E technical validation remains deferred; do not overclaim unsupported device identification/EoL/CVE certainty
