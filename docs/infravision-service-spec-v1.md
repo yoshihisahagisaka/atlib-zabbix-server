@@ -20,11 +20,11 @@ Do not expand InfraVision into company-wide IT consulting. Company-wide IT, orga
 |---|---:|---:|
 | モニタープラン | JPY 9,980 | JPY 30,000 |
 | オペレーションプラン | JPY 29,800 | JPY 50,000 (working baseline) |
-| マネージドプラン | JPY 79,800 | JPY 50,000+ (working baseline) |
+| マネージドプラン | JPY 79,800 | JPY 80,000 |
 
 Monitor initial fee means monitoring-start setup.
-Upper-plan initial fee additionally covers operation/management design.
-Complex/multi-site environments may require separate/additional quotation.
+Upper-plan initial fee additionally covers operation/management design. The standard Managed initial fee is JPY 80,000; this is the cumulative setup value used by the approved upgrade-difference model.
+Complex/multi-site environments may require separate/additional quotation outside the standard onboarding scope.
 
 Current target-device baseline remains up to 50 devices; 50+ is separately handled. Exact overage pricing remains subject to final confirmation.
 
@@ -876,3 +876,38 @@ Managed should emphasize environmental understanding, environmental facts/histor
 6. Decide whether paid after-hours staffed response will be offered as a future option
 7. Validate infrastructure/support cost before setting 50+ device and additional-site add-on prices
 8. Contract/SLA wording for best-effort triage, vendor dependencies and separately quoted work
+
+
+## 16. Partner commercial / portal direction
+
+### A. Partner monthly revenue baseline
+
+Approved sales-material baseline is approximately 25% of the customer monthly plan fee:
+
+| Plan | Customer monthly | Partner monthly revenue |
+|---|---:|---:|
+| Monitor | JPY 9,980 | **JPY 2,480** |
+| Operation | JPY 29,800 | **JPY 7,480** |
+| Managed | JPY 79,800 | **JPY 19,800** |
+
+The exact contractual/accounting treatment (resale, referral, settlement/tax handling, cancellation/proration rules) must be finalized separately before partner-program launch.
+
+### B. Partner portal
+
+Partner-facing customer visibility is part of the intended partner offer and should be implemented before external release of partner material.
+
+Purpose:
+- authorized partner can review assigned-customer status even when the end customer rarely opens the portal
+- identify important alerts, EoL/replacement candidates, vulnerability attention items and relevant changes
+- support proactive customer contact and renewal/improvement proposals
+- provide portfolio-level visibility across assigned customers
+
+Required governance:
+- explicit customer authorization
+- strict partner/customer tenant mapping
+- role-based least-privilege access
+- cross-customer isolation
+- access/audit logging
+- revocation on authorization/relationship termination
+
+External sales materials may present this as a standard value only after implementation and release validation are complete.
