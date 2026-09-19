@@ -7,6 +7,26 @@ Zabbix template), not by adding branching logic to setup_discovery.py.
 
 VENDOR_TEMPLATE_RULES = [
     {
+        "id": "yamaha-network",
+        "name": "YAMAHA Network",
+        "canonical_vendor": "YAMAHA",
+        "match_check": "sysobjectid",
+        "match_operator": "contains",
+        "match_value": "1.3.6.1.4.1.1182",
+        "template_type": "atlib_identification",
+        "template_name": "MSP - YAMAHA Device Identification",
+        "families": ["RTX", "SWX", "WLX"],
+        "verified_models": [],
+        "expected_identity": {
+            "vendor": "confirmed",
+            "model": "probable",
+            "firmware": "probable",
+        },
+        "scope": "network",
+        "enabled": False,
+        "notes": "Yamaha enterprise resolver is evidence-backed. Disabled until the atLIB identification template and real-device family extraction are validated.",
+    },
+    {
         "id": "fortinet-fortigate",
         "name": "Fortinet FortiGate",
         "canonical_vendor": "Fortinet",
