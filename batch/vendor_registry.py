@@ -7,6 +7,27 @@ Zabbix template), not by adding branching logic to setup_discovery.py.
 
 VENDOR_TEMPLATE_RULES = [
     {
+        "id": "yamaha-wlx",
+        "name": "YAMAHA WLX",
+        "canonical_vendor": "YAMAHA",
+        "match_check": "sysobjectid",
+        "match_operator": "contains",
+        "match_value": "1.3.6.1.4.1.1182",
+        "family_match": {"source": "sysdescr", "operator": "contains", "values": ["WLX"]},
+        "template_type": "atlib_identification",
+        "template_name": "MSP - YAMAHA WLX Device Identification",
+        "families": ["WLX"],
+        "verified_models": [],
+        "expected_identity": {
+            "vendor": "confirmed",
+            "model": "confirmed",
+            "firmware": "probable",
+        },
+        "scope": "network",
+        "enabled": True,
+        "notes": "Post-discovery only. Current exact sysObjectID map covers WLX212/413/222/322/323 from Yamaha primary documentation. Firmware is parsed from sysDescr when Rev.x is present; otherwise remains unknown.",
+    },
+    {
         "id": "yamaha-rtx",
         "name": "YAMAHA RTX",
         "canonical_vendor": "YAMAHA",
