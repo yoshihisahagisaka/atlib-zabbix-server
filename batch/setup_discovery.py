@@ -80,7 +80,7 @@ OID_SYSOBJECTID = "1.3.6.1.2.1.1.2.0"
 OID_SYSDESCR = "1.3.6.1.2.1.1.1.0"
 
 # Vendor/template identification knowledge is maintained separately from discovery orchestration.
-from vendor_registry import VENDOR_TEMPLATE_RULES, validate_registry
+from vendor_registry import active_vendor_template_rules, validate_registry
 
 
 def main():
@@ -150,7 +150,7 @@ def main():
         print(f"  - TCP {port}（{desc}）")
 
     print("\nベンダー横断デバイス識別（FW未特定問題対応）:")
-    for rule in VENDOR_TEMPLATE_RULES:
+    for rule in active_vendor_template_rules():
         template = _find_template_by_name(zabbix, rule["template_name"])
         status = f"templateid={template['templateid']}" if template else "[警告] テンプレート未作成のためスキップされます"
         print(f"  - {rule['name']}（{rule['match_check']}で判定）: テンプレート「{rule['template_name']}」 {status}")
@@ -465,7 +465,7 @@ def _create_vendor_template_actions(zabbix: ZabbixClient, druleid: str, dchecks:
     だが、本番でのDVALUE×DCHECKペア条件の実際の動作は未検証。初回は必ず1顧客・
     1アクションで動作確認してから他アクションの有効化を進めること。
     """
-    for rule in VENDOR_TEMPLATE_RULES:
+    for rule in active_vendor_template_rules():
         action_name = f"MSP_ベンダー識別_{customer_code}_{rule['name']}"
         if _find_action_by_name(zabbix, action_name):
             print(f"  [スキップ] アクション「{action_name}」は既に存在します")
