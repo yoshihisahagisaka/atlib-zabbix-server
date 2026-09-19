@@ -1,0 +1,67 @@
+zabbix_export:
+  version: '7.4'
+  template_groups:
+    - uuid: 36bff6c29af64692839d077febfc7079
+      name: 'Templates/Network devices'
+  templates:
+    - uuid: 6a746c696279616d6168617274783031
+      template: 'MSP - YAMAHA RTX Device Identification'
+      name: 'MSP - YAMAHA RTX Device Identification'
+      description: |
+        InfraVision identity enrichment for Yamaha RTX routers.
+        Firmware uses Yamaha RT private MIB yrfRevision.
+        Import and validate on RTX1300/RTX1220/RTX830 before production auto-apply.
+      groups:
+        - name: 'Templates/Network devices'
+      items:
+        - uuid: 6a746c696279616d6168617274783032
+          name: 'YAMAHA RTX: sysDescr raw'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.2.1.1.1.0]'
+          key: 'atlib.yamaha.rtx.sysdescr'
+          delay: 1h
+          value_type: TEXT
+          tags:
+            - tag: component
+              value: inventory
+        - uuid: 6a746c696279616d6168617274783033
+          name: 'YAMAHA RTX: Vendor'
+          type: DEPENDENT
+          key: 'atlib.yamaha.rtx.vendor'
+          value_type: CHAR
+          inventory_link: VENDOR
+          master_item:
+            key: 'atlib.yamaha.rtx.sysdescr'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - 'return "YAMAHA";'
+        - uuid: 6a746c696279616d6168617274783034
+          name: 'YAMAHA RTX: Model'
+          type: DEPENDENT
+          key: 'atlib.yamaha.rtx.model'
+          value_type: CHAR
+          inventory_link: MODEL
+          master_item:
+            key: 'atlib.yamaha.rtx.sysdescr'
+          preprocessing:
+            - type: REGEX
+              parameters:
+                - '(RTX[0-9A-Za-z-]+)'
+                - '\\1'
+              error_handler: DISCARD_VALUE
+        - uuid: 6a746c696279616d6168617274783035
+          name: 'YAMAHA RTX: Firmware revision'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.4.1.1182.2.2.3.0]'
+          key: 'atlib.yamaha.rtx.firmware'
+          delay: 1h
+          value_type: CHAR
+          inventory_link: SOFTWARE_FULL
+        - uuid: 6a746c696279616d6168617274783036
+          name: 'YAMAHA RTX: Firmware file'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.4.1.1182.2.2.1.0]'
+          key: 'atlib.yamaha.rtx.firmware_file'
+          delay: 1h
+          value_type: TEXT
