@@ -734,7 +734,126 @@ Recommended short pricing notes:
 
 > ※ 初期費用には標準的な監視開始設定を含みます。ネットワーク再設計、現地調査、機器交換・構築等は別途となります。
 
-## 13. LP / sales wording
+## 13. Customer-facing service menu / pricing sheet draft
+
+This section is the source copy for LP, one-page sales sheets and proposal pricing pages. Keep technical implementation details out of the primary view.
+
+### A. Header
+
+**atLIB InfraVision**  
+**構築したままのネットワークを、管理されているネットワークへ。**
+
+ネットワーク機器はある。でも、継続的に見る人がいない。  
+InfraVisionは、24時間の自動監視から日常運用、障害時の一次切り分けまで、必要な管理レベルに合わせて選べるネットワーク管理サービスです。
+
+### B. Three-plan pricing cards
+
+#### モニタープラン
+**月額 9,980円 / 初期 30,000円**
+
+**ネットワークを、まず「見える状態」へ。**
+
+Recommended for:
+**NWは自社で管理する。でも、放置はしたくない企業**
+
+Main inclusions:
+- 24時間自動監視
+- 死活 / SNMP監視
+- 未知機器の自動検知
+- 通知先・通知レベル・通知時間の設定
+- メンテナンス時の通知/監視抑止
+- ネットワーク構成の可視化
+- EoL / 脆弱性の自動チェック
+- 月次レポート
+
+Responsibility:
+**見える・気づける・自分で管理**
+
+#### オペレーションプラン
+**月額 29,800円 / 初期 50,000円**
+
+**監視だけでなく、日常運用の手間も減らす。**
+
+Recommended for:
+**NW担当者はいるが、定型作業に時間を取られたくない企業**
+
+Includes Monitor, plus:
+- 定期再起動等の運用自動化
+- アップデート/パッチ運用方針の設定
+- VPNアカウント追加・削除
+- Wi-Fi / NW機器パスワード変更
+- 軽微なリモート作業 月2回まで
+
+Responsibility:
+**判断は自社で。決まった運用はatLIBへ。**
+
+#### マネージドプラン
+**月額 79,800円 / 初期 80,000円**
+
+**ネットワーク担当者がいなくても、管理されている状態へ。**
+
+Recommended for:
+**NWを継続的に管理する人・契約・仕組みがない企業**
+
+Includes Operation, plus:
+- 営業時間内の障害一次切り分け
+- 監視異常の調査・対応方針案内
+- EoL / 脆弱性の詳細確認
+- ネットワーク台帳・運用履歴の継続管理
+- 専用窓口でのネットワーク相談
+- 既存設計内の日常的な軽微運用
+
+Responsibility:
+**ネットワークの管理そのものをatLIBへ。**
+
+### C. Plan-selection guide
+
+**自社で対応できるので、まず異常に気づければいい**
+-> モニタープラン
+
+**監視はもちろん、決まった運用作業も減らしたい**
+-> オペレーションプラン
+
+**障害時に調べる人もいない。相談・判断まで支援してほしい**
+-> マネージドプラン
+
+### D. Upgrade pricing
+
+InfraVision can be introduced from the minimum required level and upgraded later.
+
+| Upgrade | Upgrade fee |
+|---|---:|
+| Monitor -> Operation | JPY 20,000 |
+| Operation -> Managed | JPY 30,000 |
+| Monitor -> Managed | JPY 50,000 |
+
+Customer-facing explanation:
+**「すでに構築済みの環境をそのまま利用できる場合、初期費用を二重にいただかず、アップグレード先との差額だけで移行できます。」**
+
+### E. Common notes
+
+- standard pricing assumes up to 50 intentionally enrolled monitored devices
+- 50+ devices and multi-site / large-scale environments are separately quoted
+- automated monitoring continues 24 hours, subject to monitoring-system/connectivity availability
+- Managed staffed triage is during the defined business-hours window
+- design/build/change work such as VLAN/IP/FW redesign, equipment additions/replacements, new-site construction and onsite work is separately quoted
+- Managed consultation and ordinary operation are included under normal/fair use; project-like or unusually high-volume work is separately scoped
+- exact supported monitoring/automation functions depend on target-device capabilities
+
+### F. Sales-page hierarchy
+
+For the first customer-facing pricing view, show information in this order:
+1. outcome / responsibility level
+2. monthly price
+3. who the plan is for
+4. 5–8 representative inclusions
+5. initial fee
+6. upgrade path
+7. exclusions/notes
+
+Do not lead with Zabbix, Proxy, SNMP implementation architecture, CPE/NVD logic, or internal tooling. Put technical explanation in a later “仕組み・技術” section for customers who need evidence.
+
+## 14. LP / sales wording
 
 Recommended ladder:
 - モニター: 「見える・気づける・自分で管理できる」
@@ -747,7 +866,7 @@ Operation should emphasize automation rather than recurring manual labor.
 
 Managed should emphasize environmental understanding, environmental facts/history, triage and consultation rather than “unlimited work.”
 
-## 14. Remaining decisions before FINAL
+## 15. Remaining decisions before FINAL
 
 1. Managed fair-use wording / contract threshold after operational validation
 2. Validate the working one-request definition against actual delivery cases
