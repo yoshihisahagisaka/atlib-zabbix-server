@@ -1,0 +1,69 @@
+zabbix_export:
+  version: '7.4'
+  template_groups:
+    - uuid: 36bff6c29af64692839d077febfc7079
+      name: 'Templates/Network devices'
+  templates:
+    - uuid: 6a746c696279616d6168617377783031
+      template: 'MSP - YAMAHA SWX Device Identification'
+      name: 'MSP - YAMAHA SWX Device Identification'
+      description: |
+        InfraVision identity enrichment for Yamaha SWX switches.
+        Vendor/model are derived from sysDescr; firmware is collected from Yamaha private MIB ysfRevision.
+        Import and validate on a real SWX before enabling automatic family linking.
+      groups:
+        - name: 'Templates/Network devices'
+      items:
+        - uuid: 6a746c696279616d6168617377783032
+          name: 'YAMAHA SWX: sysDescr raw'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.2.1.1.1.0]'
+          key: 'atlib.yamaha.swx.sysdescr'
+          delay: 1h
+          value_type: TEXT
+          tags:
+            - tag: component
+              value: inventory
+        - uuid: 6a746c696279616d6168617377783033
+          name: 'YAMAHA SWX: Vendor'
+          type: DEPENDENT
+          key: 'atlib.yamaha.swx.vendor'
+          value_type: CHAR
+          inventory_link: VENDOR
+          master_item:
+            key: 'atlib.yamaha.swx.sysdescr'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - 'return "YAMAHA";'
+          tags:
+            - tag: component
+              value: inventory
+        - uuid: 6a746c696279616d6168617377783034
+          name: 'YAMAHA SWX: Model'
+          type: DEPENDENT
+          key: 'atlib.yamaha.swx.model'
+          value_type: CHAR
+          inventory_link: MODEL
+          master_item:
+            key: 'atlib.yamaha.swx.sysdescr'
+          preprocessing:
+            - type: REGEX
+              parameters:
+                - '(SWX[0-9A-Za-z-]+)'
+                - '\\1'
+              error_handler: DISCARD_VALUE
+          tags:
+            - tag: component
+              value: inventory
+        - uuid: 6a746c696279616d6168617377783035
+          name: 'YAMAHA SWX: Firmware'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.4.1.1182.3.2.3]'
+          key: 'atlib.yamaha.swx.firmware'
+          delay: 1h
+          value_type: CHAR
+          inventory_link: SOFTWARE_FULL
+          tags:
+            - tag: component
+              value: inventory
