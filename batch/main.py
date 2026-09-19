@@ -21,6 +21,7 @@ from zabbix_client import ZabbixClient
 from cpe_mapper import CpeMapper
 from nvd_client import NvdClient, NvdLookupError
 from eol_client import EolClient
+from version_applicability import evaluate_version
 
 HERE = Path(__file__).parent
 
@@ -102,7 +103,7 @@ def main():
             cve_source = None
             cve_status = "lookup_failed"
 
-        hw_eol_info = eol_client.get_hw_eol(device_key, model)
+        cve_counts = _classify_cves(cves, fw, cve_source) if cve_status == "ok" else {\n            "confirmed_affected": 0, "potentially_affected": 0, "not_affected": 0, "not_assessable": 0\n        }\n\n        hw_eol_info = eol_client.get_hw_eol(device_key, model)
         sw_eol_info = eol_client.get_sw_eol(device_key, fw)
 
         # eol_overrides.jsonのsw.fixed_in_versionが分かっている場合、実機ファームウェアが
@@ -123,6 +124,7 @@ def main():
             "cpe": cpe,
             "cve_source": cve_source,
             "cve_status": cve_status,
+            "cve_counts": cve_counts,
             "hw_eol": hw_eol_info,
             "sw_eol": sw_eol_info,
             "cves": cves,
@@ -151,7 +153,7 @@ def main():
                 continue
             try:
                 zabbix.write_back_risk(
-                    hostid, r["risk_level"], r["cve_status"], r["hw_eol"], r["sw_eol"], r["cves"],
+                    hostid, r["risk_level"], r["cve_status"], r["hw_eol"], r["sw_eol"], r["cves"], r.get("cve_counts"),
                 )
                 print(f"  書き戻し完了: {r['host']} → {r['risk_level']}")
             except Exception as e:
@@ -176,6 +178,53 @@ def main():
             print("  → 新規ネイバーなし")
 
     _print_summary(results)
+
+
+
+def _walk_cpe_matches(nodes: list[dict]):
+    """Yield vulnerable cpeMatch entries while preserving whether complex logical nodes exist."""
+    for node in nodes or []:
+        for match in node.get("cpeMatch", []) or []:
+            if match.get("vulnerable"):
+                yield match
+        yield from _walk_cpe_matches(node.get("nodes", []) or [])
+
+
+def _classify_cves(cves: list[dict], firmware: str, source: str | None) -> dict:
+    """Attach conservative firmware applicability to each CVE and return aggregate counts.
+
+    Keyword-only discovery cannot prove product applicability, so it never becomes confirmed.
+    Complex NVD AND/negate configuration is intentionally downgraded to potential.
+    """
+    counts = {"confirmed_affected": 0, "potentially_affected": 0, "not_affected": 0, "not_assessable": 0}
+    for cve in cves:
+        if source != "cpe":
+            status, reason = "potentially_affected", "keyword-only product match"
+        elif not firmware:
+            status, reason = "not_assessable", "installed firmware missing"
+        else:
+            configs = cve.get("configurations", []) or []
+            complex_logic = any(cfg.get("operator") == "AND" or cfg.get("negate") for cfg in configs)
+            matches = list(_walk_cpe_matches(configs))
+            if complex_logic:
+                status, reason = "potentially_affected", "complex NVD configuration requires review"
+            elif not matches:
+                status, reason = "potentially_affected", "no evaluable vulnerable CPE criterion"
+            else:
+                evaluated = [evaluate_version(firmware, m) for m in matches]
+                statuses = {e.status for e in evaluated}
+                if "confirmed_affected" in statuses:
+                    status, reason = "confirmed_affected", "installed firmware satisfies vulnerable NVD criterion"
+                elif statuses == {"not_affected"}:
+                    status, reason = "not_affected", "installed firmware outside vulnerable NVD criteria"
+                elif "potentially_affected" in statuses:
+                    status, reason = "potentially_affected", "version comparison or applicability is ambiguous"
+                else:
+                    status, reason = "not_assessable", "applicability could not be assessed"
+        cve["applicability_status"] = status
+        cve["applicability_reason"] = reason
+        counts[status] += 1
+    return counts
 
 
 # ------------------------------------------------------------------
@@ -203,17 +252,12 @@ def _calc_risk(cves: list[dict], cve_status: str, hw_eol_info: dict, sw_eol_info
         return "critical"
 
     if cve_status == "ok":
-        exploited = [c for c in cves if c.get("actively_exploited")]
-        critical_cves = [c for c in cves if (c.get("cvss_score") or 0) >= 9.0]
-        high_cves = [c for c in cves if 7.0 <= (c.get("cvss_score") or 0) < 9.0]
-
+        confirmed = [c for c in cves if c.get("applicability_status") == "confirmed_affected"]\n        potential = [c for c in cves if c.get("applicability_status") in ("potentially_affected", "not_assessable")]\n        exploited = [c for c in confirmed if c.get("actively_exploited")]\n        critical_cves = [c for c in confirmed if (c.get("cvss_score") or 0) >= 9.0]\n        high_cves = [c for c in confirmed if 7.0 <= (c.get("cvss_score") or 0) < 9.0]\n
         if exploited or critical_cves:
             return "critical"
         if high_cves:
             return "high"
-        if cves:
-            return "medium"
-
+        if confirmed:\n            return "medium"\n        if potential:\n            return "unknown"\n
     for eol_info in (hw_eol_info, sw_eol_info):
         if _is_determined(eol_info) and eol_info.get("days_until_eol") is not None \
                 and eol_info["days_until_eol"] <= 90:
