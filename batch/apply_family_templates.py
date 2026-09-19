@@ -13,6 +13,8 @@ from zabbix_client import ZabbixClient
 
 SYSOBJECTID_KEYS = ("system.objectid[sysObjectID.0]", "system.objectid", "sysObjectID")
 SYSDESCR_KEYS = ("system.descr[sysDescr.0]", "system.descr", "sysDescr")
+SYSOBJECTID_OID = "1.3.6.1.2.1.1.2.0"
+SYSDESCR_OID = "1.3.6.1.2.1.1.1.0"
 
 
 def _connect() -> ZabbixClient:
@@ -29,16 +31,18 @@ def _connect() -> ZabbixClient:
 def _evidence(z: ZabbixClient, hostid: str) -> AssetEvidence:
     items = z.call("item.get", {
         "hostids": hostid,
-        "output": ["key_", "lastvalue"],
-        "search": {"key_": "system."},
+        "output": ["key_", "snmp_oid", "lastvalue"],
     })
     values = {i["key_"]: i.get("lastvalue", "") for i in items}
-    def first(keys):
+    def first(keys, oid):
         for key in keys:
             if values.get(key):
                 return values[key].strip()
+        for item in items:
+            if oid in (item.get("snmp_oid") or "") and item.get("lastvalue"):
+                return item["lastvalue"].strip()
         return ""
-    return AssetEvidence(sysobjectid=first(SYSOBJECTID_KEYS), sysdescr=first(SYSDESCR_KEYS))
+    return AssetEvidence(\n        sysobjectid=first(SYSOBJECTID_KEYS, SYSOBJECTID_OID),\n        sysdescr=first(SYSDESCR_KEYS, SYSDESCR_OID),\n    )
 
 
 def _template(z: ZabbixClient, name: str) -> dict | None:
