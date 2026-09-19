@@ -73,6 +73,8 @@ class NvdClient:
             "published": cve.get("published", ""),
             "modified": cve.get("lastModified", ""),
             "actively_exploited": cve_id in self._kev,
+            # Keep NVD applicability configuration so the caller can evaluate the installed firmware.
+            "configurations": cve.get("configurations", []),
             "url": f"https://nvd.nist.gov/vuln/detail/{cve_id}",
         }
 
