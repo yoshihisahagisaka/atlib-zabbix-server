@@ -447,23 +447,48 @@ def _ensure_sysdescr_dcheck(zabbix: ZabbixClient, druleid: str, dchecks: list[di
     return _find_dcheck(refreshed[0]["dchecks"], OID_SYSDESCR)
 
 
+def _required_discovery_check(zabbix: ZabbixClient, druleid: str, dchecks: list[dict],
+                              source: str) -> dict | None:
+    """Return the discovery check required by one resolver predicate."""
+    oid = OID_SYSOBJECTID if source == "sysobjectid" else OID_SYSDESCR
+    dcheck = _find_dcheck(dchecks, oid)
+    if not dcheck and source == "sysdescr":
+        dcheck = _ensure_sysdescr_dcheck(zabbix, druleid, dchecks)
+    return dcheck
+
+
+def _resolver_predicates(rule: dict) -> list[dict]:
+    """Flatten vendor/family metadata into independent discovery-event predicates.
+
+    Zabbix network discovery evaluates Received value against one discovery event
+    at a time. Therefore predicates from different dchecks (for example
+    sysObjectID AND sysDescr) cannot safely be treated as one atomic event filter.
+    Rules that need cross-check evidence are not auto-linked by this function.
+    """
+    predicates = [{
+        "source": rule["match_check"],
+        "value": rule["match_value"],
+        "role": "vendor",
+    }]
+    family = rule.get("family_match")
+    if family:
+        for value in family["values"]:
+            predicates.append({
+                "source": family["source"],
+                "value": value,
+                "role": "family",
+            })
+    return predicates
+
+
 def _create_vendor_template_actions(zabbix: ZabbixClient, druleid: str, dchecks: list[dict],
                                      customer_code: str) -> None:
-    """VENDOR_TEMPLATE_RULESの各エントリについて、sysObjectID/sysDescrの内容に応じて
-    ベンダー専用テンプレートを追加リンクするDiscovery Actionを作成する（FW未特定問題
-    への対応。詳細は同定数のコメントを参照）。
+    """Create only event-safe vendor/family template-link actions.
 
-    既存の_create_snmp_action()と同じ「ディスカバリルール・デバイスステータス=Up・
-    サービスタイプ=SNMPv2」の条件に、conditiontype=19(DCHECK)+12(DVALUE, Received
-    value)のペア条件を追加した専用アクションを、ベンダーごとに1つずつ作る。
-    デバイスステータス=Upは毎ポーリングサイクルで再評価されるため、新規オンボード
-    顧客だけでなく既存ホストも次回ポーリングサイクルで自動的にテンプレートがリンク
-    される（バックフィルスクリプト不要）。
-
-    conditiontype 12(DVALUE)/19(DCHECK)の数値、operator 2(LIKE=containsに相当)の
-    数値は、いずれもZabbix公式リポジトリのui/include/defines.inc.phpで裏取り済み
-    だが、本番でのDVALUE×DCHECKペア条件の実際の動作は未検証。初回は必ず1顧客・
-    1アクションで動作確認してから他アクションの有効化を進めること。
+    Important Zabbix constraint: each SNMP discovery check emits its own discovery
+    event. Received-value conditions do not combine values from separate checks.
+    Consequently a rule requiring sysObjectID + sysDescr is intentionally skipped
+    here and must be resolved post-discovery from host evidence.
     """
     for rule in active_vendor_template_rules():
         action_name = f"MSP_ベンダー識別_{customer_code}_{rule['name']}"
@@ -474,53 +499,50 @@ def _create_vendor_template_actions(zabbix: ZabbixClient, druleid: str, dchecks:
         template = _find_template_by_name(zabbix, rule["template_name"])
         if not template:
             print(f"  [警告] テンプレート「{rule['template_name']}」がまだ存在しないため、"
-                  f"「{rule['name']}」の自動識別アクションは作成しませんでした。"
-                  f"Zabbix管理画面でテンプレートを作成後、本スクリプトを再実行してください。")
+                  f"「{rule['name']}」の自動識別アクションは作成しませんでした。")
             continue
 
-        oid = OID_SYSOBJECTID if rule["match_check"] == "sysobjectid" else OID_SYSDESCR
-        dcheck = _find_dcheck(dchecks, oid)
-        if not dcheck and rule["match_check"] == "sysdescr":
-            dcheck = _ensure_sysdescr_dcheck(zabbix, druleid, dchecks)
-            print(f"    sysDescrチェックをルールに追加しました（dcheckid={dcheck['dcheckid']}）")
+        predicates = _resolver_predicates(rule)
+        sources = {p["source"] for p in predicates}
+        if len(sources) > 1:
+            print(f"  [保留] 「{rule['name']}」は複数dcheckのEvidenceが必要です。"
+                  "Zabbix Discovery Actionでは別イベントのReceived valueを安全にANDできないため、"
+                  "post-discovery resolver対象とします。")
+            continue
+
+        dcheck = _required_discovery_check(zabbix, druleid, dchecks, predicates[0]["source"])
         if not dcheck:
-            print(f"  [警告] 「{rule['name']}」の判定に必要なdcheck(OID={oid})が見つからないためスキップします")
+            print(f"  [警告] 「{rule['name']}」の判定dcheckが見つからないためスキップします")
             continue
 
+        # Multiple accepted strings on the same discovery check are OR semantics.
+        # Use a custom expression so base conditions remain AND while values are OR.
         conditions = [
-            {"conditiontype": 18, "operator": 0, "value": druleid},
-            {"conditiontype": 10, "operator": 0, "value": "0"},
-            {"conditiontype": 8,  "operator": 0, "value": "11"},
-            {"conditiontype": 19, "operator": 0, "value": dcheck["dcheckid"]},
-            {"conditiontype": 12, "operator": 2, "value": rule["match_value"]},
+            {"conditiontype": 18, "operator": 0, "value": druleid, "formulaid": "A"},
+            {"conditiontype": 10, "operator": 0, "value": "0", "formulaid": "B"},
+            {"conditiontype": 8, "operator": 0, "value": "11", "formulaid": "C"},
+            {"conditiontype": 19, "operator": 0, "value": dcheck["dcheckid"], "formulaid": "D"},
         ]
-
-        # Family guard: vendor enterprise alone is not sufficient for a family-specific
-        # official template. Add an additional discovery-check/value pair when configured.
-        # With evaltype=0 Zabbix ANDs different condition types but ORs same-type values,
-        # so multiple family values are intentionally not expanded here. Keep the first
-        # production guard conservative until a custom-expression resolver is introduced.
-        family_match = rule.get("family_match")
-        if family_match:
-            family_oid = OID_SYSOBJECTID if family_match["source"] == "sysobjectid" else OID_SYSDESCR
-            family_dcheck = _find_dcheck(dchecks, family_oid)
-            if not family_dcheck and family_match["source"] == "sysdescr":
-                family_dcheck = _ensure_sysdescr_dcheck(zabbix, druleid, dchecks)
-            if not family_dcheck:
-                print(f"  [警告] 「{rule['name']}」のFamily判定dcheckが無いためスキップします")
-                continue
-            family_value = family_match["values"][0]
-            conditions.extend([
-                {"conditiontype": 19, "operator": 0, "value": family_dcheck["dcheckid"]},
-                {"conditiontype": 12, "operator": 2, "value": family_value},
-            ])
+        value_letters = []
+        alphabet = "EFGHIJKLMNOPQRSTUVWXYZ"
+        for i, predicate in enumerate(predicates):
+            letter = alphabet[i]
+            conditions.append({
+                "conditiontype": 12,
+                "operator": 2,
+                "value": predicate["value"],
+                "formulaid": letter,
+            })
+            value_letters.append(letter)
+        formula = "A and B and C and D and (" + " or ".join(value_letters) + ")"
 
         zabbix.call("action.create", {
             "name": action_name,
             "eventsource": 1,
             "status": 0,
             "filter": {
-                "evaltype": 0,
+                "evaltype": 3,
+                "formula": formula,
                 "conditions": conditions,
             },
             "operations": [
