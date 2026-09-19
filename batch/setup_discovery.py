@@ -487,19 +487,41 @@ def _create_vendor_template_actions(zabbix: ZabbixClient, druleid: str, dchecks:
             print(f"  [警告] 「{rule['name']}」の判定に必要なdcheck(OID={oid})が見つからないためスキップします")
             continue
 
+        conditions = [
+            {"conditiontype": 18, "operator": 0, "value": druleid},
+            {"conditiontype": 10, "operator": 0, "value": "0"},
+            {"conditiontype": 8,  "operator": 0, "value": "11"},
+            {"conditiontype": 19, "operator": 0, "value": dcheck["dcheckid"]},
+            {"conditiontype": 12, "operator": 2, "value": rule["match_value"]},
+        ]
+
+        # Family guard: vendor enterprise alone is not sufficient for a family-specific
+        # official template. Add an additional discovery-check/value pair when configured.
+        # With evaltype=0 Zabbix ANDs different condition types but ORs same-type values,
+        # so multiple family values are intentionally not expanded here. Keep the first
+        # production guard conservative until a custom-expression resolver is introduced.
+        family_match = rule.get("family_match")
+        if family_match:
+            family_oid = OID_SYSOBJECTID if family_match["source"] == "sysobjectid" else OID_SYSDESCR
+            family_dcheck = _find_dcheck(dchecks, family_oid)
+            if not family_dcheck and family_match["source"] == "sysdescr":
+                family_dcheck = _ensure_sysdescr_dcheck(zabbix, druleid, dchecks)
+            if not family_dcheck:
+                print(f"  [警告] 「{rule['name']}」のFamily判定dcheckが無いためスキップします")
+                continue
+            family_value = family_match["values"][0]
+            conditions.extend([
+                {"conditiontype": 19, "operator": 0, "value": family_dcheck["dcheckid"]},
+                {"conditiontype": 12, "operator": 2, "value": family_value},
+            ])
+
         zabbix.call("action.create", {
             "name": action_name,
             "eventsource": 1,
             "status": 0,
             "filter": {
-                "evaltype": 0,  # AND（型が異なる条件は自動的にAND）
-                "conditions": [
-                    {"conditiontype": 18, "operator": 0, "value": druleid},            # ディスカバリルール
-                    {"conditiontype": 10, "operator": 0, "value": "0"},                # デバイスステータス=Up
-                    {"conditiontype": 8,  "operator": 0, "value": "11"},               # サービスタイプ=SNMPv2
-                    {"conditiontype": 19, "operator": 0, "value": dcheck["dcheckid"]}, # 対象dcheck
-                    {"conditiontype": 12, "operator": 2, "value": rule["match_value"]},# Received valueがcontains
-                ],
+                "evaltype": 0,
+                "conditions": conditions,
             },
             "operations": [
                 {"operationtype": 6, "optemplate": [{"templateid": template["templateid"]}]},
