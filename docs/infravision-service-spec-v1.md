@@ -572,7 +572,151 @@ For Managed:
 
 > ※ マネージドプランの日常運用・NW相談は通常利用の範囲で月額に含まれます。大規模・高頻度な変更作業や設計・構築を伴う対応は別途お見積りとなります。
 
-## 12. LP / sales wording
+## 12. Commercial operating rules — working baseline
+
+### A. Initial fee scope
+
+#### Monitor — JPY 30,000
+The initial fee covers standard onboarding required to start InfraVision monitoring.
+
+Standard scope:
+- customer/environment registration
+- Sensor Edge / monitoring connection setup guidance and registration
+- target network range registration
+- customer Zabbix Proxy / host-group / discovery setup as applicable
+- SNMP prerequisite confirmation
+- initial automatic discovery execution
+- initial monitoring-status confirmation
+- customer portal account/setup
+- standard notification baseline setup
+- initial topology/asset-data acquisition where technically available
+
+The initial fee does **not** mean a full network audit, network redesign, remediation, onsite survey, cabling, or manual creation of a complete legacy asset ledger.
+
+Commercial principle:
+**The customer should not need to prepare a perfect asset ledger before onboarding.**
+
+#### Operation — JPY 50,000
+Includes Monitor onboarding plus **operation-automation design**.
+
+Additional standard scope:
+- identify devices/actions eligible for predefined operation
+- agree periodic reboot schedule where used
+- agree automatic-update / patch-operation policy where applicable
+- define maintenance window
+- define actions safe for automatic execution
+- define actions requiring customer approval
+- confirm standard light-request scope and execution prerequisites
+- initial setup/test of agreed automated operations where technically supported
+
+#### Managed — JPY 50,000 baseline
+Includes Monitor onboarding plus **managed-operation handoff/setup**.
+
+Additional standard scope:
+- establish initial network management ledger from automatically obtained and customer-provided facts
+- confirm important network roles/topology
+- define incident contact/escalation path
+- confirm inquiry/support channel
+- define known third-party/vendor dependencies
+- confirm operational boundaries and separately quoted change areas
+- create the initial managed baseline used for future triage and consultation
+
+If the customer has multiple sites, unusually complex topology, large device volume, undocumented legacy equipment, or requires material manual investigation, additional onboarding/design work may be quoted separately.
+
+### B. Definition of one Operation request
+
+Operation includes up to **2 customer-requested light remote work requests per month**.
+
+One request means:
+**one customer instruction, for one operational purpose, executable as one standard work unit under the existing agreed design/procedure.**
+
+Typical one-request examples:
+- add one VPN account
+- remove one VPN account
+- change one Wi-Fi password under the agreed standard procedure
+- change one network-device password under the agreed standard procedure
+
+The following are not automatically one light request:
+- bulk user/account changes
+- changes spanning many devices/sites
+- work requiring investigation before execution
+- work requiring a new design/security decision
+- repeated retries caused by external/customer-side conditions
+- configuration migration or replacement work
+
+For unusual but still lightweight requests, atLIB may agree the request count before execution.
+
+### C. Operation request accounting
+
+Working commercial rule:
+- 2 requests are available per contract month
+- unused requests **expire at month-end**
+- requests do **not carry over**
+- predefined scheduled/automated operations do **not** consume request slots
+- work required to correct an atLIB execution error does **not** consume an additional slot
+- separately quoted work does not consume slots
+
+Reason:
+The monthly fee pays for continuous service readiness and automation, not a prepaid bank of labor hours.
+
+### D. Device-count rule
+
+Current standard package baseline:
+**up to 50 monitored devices per customer contract.**
+
+For 50+ devices:
+- do not automatically promise a fixed per-device increment until actual monitoring/storage/support cost is validated
+- quote separately based on device count, monitoring-item volume, site count and management complexity
+- keep the 50-device standard easy to understand in customer-facing material
+
+Do not publish an unverified “per 10 devices +JPY X” rule as canonical pricing.
+
+### E. Multi-site rule
+
+A second site is not automatically equivalent to “more devices” because it may require:
+- additional Sensor Edge / proxy deployment
+- separate network ranges
+- separate topology
+- separate ISP/vendor context
+- separate onsite/remote onboarding coordination
+- more incident-isolation complexity
+
+Working rule:
+- **one standard contract includes one primary site/environment**
+- additional sites are individually assessed during onboarding
+- if an additional site only adds a small, technically simple monitored segment, it may be absorbed or priced as an add-on
+- if it requires an additional Sensor Edge/proxy or materially separate operational management, charge an additional site/setup fee and, where appropriate, recurring add-on
+
+Exact additional-site price should be set only after infrastructure and support-cost validation.
+
+### F. What counts toward the 50-device limit
+
+Count network/infrastructure endpoints intentionally registered as InfraVision monitored hosts, such as:
+- router
+- firewall/UTM
+- switch
+- wireless AP/controller
+- server or infrastructure appliance included in the agreed monitoring scope
+
+Do not automatically count:
+- employee PCs
+- smartphones/tablets
+- transient unknown discovery results
+- devices detected but not intentionally enrolled as monitored hosts
+
+Printers/IoT/other SNMP devices may be technically detectable; whether they count as contracted monitored devices depends on whether they are intentionally enrolled in the monitoring scope.
+
+### G. Customer-facing commercial notes
+
+Recommended short pricing notes:
+
+> ※ 標準料金は監視対象50台までを想定しています。50台を超える場合や複数拠点・大規模ネットワークは個別にお見積りします。
+
+> ※ オペレーションプランの依頼作業は月2回までです。未使用分の翌月繰越はありません。あらかじめ設定した定期・自動運用は回数に含みません。
+
+> ※ 初期費用には標準的な監視開始設定を含みます。ネットワーク再設計、現地調査、機器交換・構築等は別途となります。
+
+## 13. LP / sales wording
 
 Recommended ladder:
 - モニター: 「見える・気づける・自分で管理できる」
@@ -585,13 +729,13 @@ Operation should emphasize automation rather than recurring manual labor.
 
 Managed should emphasize environmental understanding, environmental facts/history, triage and consultation rather than “unlimited work.”
 
-## 13. Remaining decisions before FINAL
+## 14. Remaining decisions before FINAL
 
 1. Managed fair-use wording / contract threshold after operational validation
-2. Exact definition of one Operation request: time/complexity/target-device limits
-3. Whether unused Operation requests expire or carry over
+2. Validate the working one-request definition against actual delivery cases
+3. Validate the no-carry-over rule against sales/customer feedback
 4. Confirm company business-day/holiday definition for the working 9:00-18:00 staffed window
 5. Validate delivery capacity before setting any numerical first-response target
 6. Decide whether paid after-hours staffed response will be offered as a future option
-7. Exact 50+ device overage pricing and multi-site rules
+7. Validate infrastructure/support cost before setting 50+ device and additional-site add-on prices
 8. Contract/SLA wording for best-effort triage, vendor dependencies and separately quoted work
