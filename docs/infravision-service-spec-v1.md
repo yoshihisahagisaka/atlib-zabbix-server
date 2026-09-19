@@ -478,7 +478,7 @@ The customer-facing comparison should explain the **reason to upgrade**, not enu
 | | モニタープラン | オペレーションプラン | マネージドプラン |
 |---|---|---|---|
 | Monthly | **JPY 9,980** | **JPY 29,800** | **JPY 79,800** |
-| Initial | **JPY 30,000** | **JPY 50,000** | **JPY 50,000+** |
+| Initial | **JPY 30,000** | **JPY 50,000** | **JPY 80,000** |
 | Core value | **見える・気づける・自分で管理** | **日常運用まで任せる** | **NW管理そのものを任せる** |
 | Best fit | NWを放置したくない | 定型運用の手間を減らしたい | NW担当者がいない／管理まで任せたい |
 | 24h automated monitoring | Yes | Yes | Yes |
@@ -609,7 +609,7 @@ Additional standard scope:
 - confirm standard light-request scope and execution prerequisites
 - initial setup/test of agreed automated operations where technically supported
 
-#### Managed — JPY 50,000 baseline
+#### Managed — JPY 80,000
 Includes Monitor onboarding plus **managed-operation handoff/setup**.
 
 Additional standard scope:
@@ -622,6 +622,24 @@ Additional standard scope:
 - create the initial managed baseline used for future triage and consultation
 
 If the customer has multiple sites, unusually complex topology, large device volume, undocumented legacy equipment, or requires material manual investigation, additional onboarding/design work may be quoted separately.
+
+### H. Plan upgrade fee
+
+Initial fees are cumulative setup values for reaching each service responsibility level:
+- Monitor: JPY 30,000 — monitoring setup
+- Operation: JPY 50,000 — monitoring setup + operation-automation design
+- Managed: JPY 80,000 — monitoring/operation setup + managed-operation handoff/design
+
+When an active customer upgrades and the existing InfraVision environment can be reused, charge the difference between the destination plan initial fee and the current plan initial fee as the **upgrade fee**.
+
+Standard examples:
+- Monitor -> Operation: JPY 20,000
+- Operation -> Managed: JPY 30,000
+- Monitor -> Managed: JPY 50,000
+
+This is not a discount; previously completed reusable setup is not charged twice.
+
+The difference rule does not automatically apply when the prior environment can no longer be reused, such as after cancellation/re-onboarding, major network replacement, substantial topology change, or other conditions requiring material reimplementation. In such cases, atLIB may apply the standard initial fee or a separately quoted setup fee.
 
 ### B. Definition of one Operation request
 
