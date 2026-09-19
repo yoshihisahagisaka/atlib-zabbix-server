@@ -79,52 +79,13 @@ STANDARD_TCP_CHECKS = [
 OID_SYSOBJECTID = "1.3.6.1.2.1.1.2.0"
 OID_SYSDESCR = "1.3.6.1.2.1.1.1.0"
 
-# ベンダー横断デバイス識別（FW未特定問題への対応）: sysObjectID/sysDescrの内容に応じて、
-# ベンダー専用テンプレート（FWバージョン等をZabbixのホストインベントリへ自動反映する
-# アイテムを持つ。実装はZabbix管理画面側、本スクリプトはリンクの自動化のみを担う）を
-# 追加リンクするDiscovery Actionを顧客ごとに作成する。
-#
-# 設計判断: ベンダーごとにPythonの正規表現パーサーを書く方式は、機種が増えるたびに
-# コードの保守対象が増え続けるためMSPの運用として非現実的、という判断で不採用とした。
-# 代わりにZabbixのテンプレート・アイテムプリプロセッシング・ホストインベントリ自動反映
-# （inventory_link）というノーコードの標準機能に寄せている。新しい機種に対応する際は、
-# Zabbix管理画面でテンプレートを1つ作成し、ここに1エントリ追加するだけでよい。
-#
-# match_check: "sysobjectid"（enterprise numberでベンダー確定できる機種向け）または
-#   "sysdescr"（sysObjectIDがNet-SNMP等の汎用OIDでベンダー識別に使えず、sysDescrの
-#   文字列でしか判定できない機種向け。例: Ubiquiti UniFiシリーズ）
-# match_value: Received value条件（LIKE演算子）でのマッチ対象文字列
-# template_name: Zabbix管理画面で事前に作成しておくテンプレート名。本スクリプト実行時に
-#   未作成の場合は警告を出してそのベンダーの自動リンクをスキップする（他のベンダーの
-#   処理には影響しない）
-VENDOR_TEMPLATE_RULES = [
-    {
-        "name": "NETGEAR",
-        "match_check": "sysobjectid",
-        "match_value": "1.3.6.1.4.1.4526",
-        "template_name": "MSP - NETGEAR Device Identification",
-    },
-    {
-        "name": "Brother",
-        "match_check": "sysobjectid",
-        "match_value": "1.3.6.1.4.1.2435",
-        "template_name": "MSP - Brother Device Identification",
-    },
-    {
-        "name": "Ubiquiti UniFi",
-        # sysObjectIDが".1.3.6.1.4.1.8072"（Net-SNMPそのものの汎用OID）を返す機種が
-        # あり、sysObjectIDだけではベンダー識別できないため、sysDescrの文字列
-        # （例: "Ubiquiti UniFi UCG-Ultra 5.1.19 Linux 5.4.213 ipq5322"）で判定する。
-        # atLIB実機（atl-router02）で2026-08-07に確認済み。
-        "match_check": "sysdescr",
-        "match_value": "Ubiquiti UniFi",
-        "template_name": "MSP - Ubiquiti UniFi Device Identification",
-    },
-]
+# Vendor/template identification knowledge is maintained separately from discovery orchestration.
+from vendor_registry import VENDOR_TEMPLATE_RULES, validate_registry
 
 
 def main():
     args = _parse_args()
+    validate_registry()
     zabbix = _connect()
 
     print(f"Zabbix APIバージョン: {zabbix.call('apiinfo.version', {})}\n")
