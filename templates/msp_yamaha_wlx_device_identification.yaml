@@ -1,0 +1,80 @@
+zabbix_export:
+  version: '7.4'
+  template_groups:
+    - uuid: 36bff6c29af64692839d077febfc7079
+      name: 'Templates/Network devices'
+  templates:
+    - uuid: 6a746c696279616d616861776c783031
+      template: 'MSP - YAMAHA WLX Device Identification'
+      name: 'MSP - YAMAHA WLX Device Identification'
+      description: |
+        InfraVision identity enrichment for Yamaha WLX access points.
+        Model is resolved from the exact sysObjectID first, avoiding dependence on sysDescr formatting.
+        Firmware is parsed from sysDescr only when a Rev.x token is present.
+        Validate on real devices before production auto-apply.
+      groups:
+        - name: 'Templates/Network devices'
+      items:
+        - uuid: 6a746c696279616d616861776c783032
+          name: 'YAMAHA WLX: sysObjectID raw'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.2.1.1.2.0]'
+          key: 'atlib.yamaha.wlx.sysobjectid'
+          delay: 1h
+          value_type: CHAR
+        - uuid: 6a746c696279616d616861776c783033
+          name: 'YAMAHA WLX: sysDescr raw'
+          type: SNMP_AGENT
+          snmp_oid: 'get[1.3.6.1.2.1.1.1.0]'
+          key: 'atlib.yamaha.wlx.sysdescr'
+          delay: 1h
+          value_type: TEXT
+        - uuid: 6a746c696279616d616861776c783034
+          name: 'YAMAHA WLX: Vendor'
+          type: DEPENDENT
+          key: 'atlib.yamaha.wlx.vendor'
+          value_type: CHAR
+          inventory_link: VENDOR
+          master_item:
+            key: 'atlib.yamaha.wlx.sysobjectid'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - 'return "YAMAHA";'
+        - uuid: 6a746c696279616d616861776c783035
+          name: 'YAMAHA WLX: Model'
+          type: DEPENDENT
+          key: 'atlib.yamaha.wlx.model'
+          value_type: CHAR
+          inventory_link: MODEL
+          master_item:
+            key: 'atlib.yamaha.wlx.sysobjectid'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var oid = value.replace(/^\.?/, "");
+                  var models = {
+                    "1.3.6.1.4.1.1182.1.66": "WLX212",
+                    "1.3.6.1.4.1.1182.1.67": "WLX413",
+                    "1.3.6.1.4.1.1182.1.77": "WLX222",
+                    "1.3.6.1.4.1.1182.1.79": "WLX322",
+                    "1.3.6.1.4.1.1182.1.80": "WLX323"
+                  };
+                  if (!(oid in models)) throw "unsupported WLX sysObjectID: " + oid;
+                  return models[oid];
+              error_handler: DISCARD_VALUE
+        - uuid: 6a746c696279616d616861776c783036
+          name: 'YAMAHA WLX: Firmware from sysDescr'
+          type: DEPENDENT
+          key: 'atlib.yamaha.wlx.firmware'
+          value_type: CHAR
+          inventory_link: SOFTWARE_FULL
+          master_item:
+            key: 'atlib.yamaha.wlx.sysdescr'
+          preprocessing:
+            - type: REGEX
+              parameters:
+                - '(Rev\.[0-9]+\.[0-9]+\.[0-9]+)'
+                - '\\1'
+              error_handler: DISCARD_VALUE
